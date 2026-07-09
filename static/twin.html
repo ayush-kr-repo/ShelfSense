@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>ShelfSense — 3D Twin</title>
+  <style>
+    body { margin: 0; overflow: hidden; font-family: sans-serif; }
+    #info {
+      position: absolute; top: 10px; left: 10px;
+      color: #eee; background: rgba(0,0,0,0.6);
+      padding: 10px 14px; border-radius: 8px; font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div id="info">loading layout…</div>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+
+  <script type="module">
+    import * as THREE from "three";
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+    // ---------- 1. the film set ----------
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x1a1a2e);
+
+    const camera = new THREE.PerspectiveCamera(
+      60, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.set(12, 10, 16);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    // ---------- 2. mouse controls: orbit / zoom / pan ----------
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.target.set(5, 0, 4);      // orbit around the floor's centre
+    controls.update();
+
+    // ---------- 3. lights ----------
+    scene.add(new THREE.AmbientLight(0xffffff, 0.6));          // soft fill
+    const sun = new THREE.DirectionalLight(0xffffff, 1.2);     // the "sun"
+    sun.position.set(10, 20, 10);
+    scene.add(sun);
+
+    // ---------- 4. the request: same Figure-5 scenario ----------
+    const request = {
+      floor_w_m: 10, floor_d_m: 8,
+      shelves: Array.from({ length: 12 }, (_, i) => ({ id: `S${i}`, w: 2.0, d: 0.6 })),
+      exit_zone: [0, 0, 1.5, 1.5],
+    };
+
+    // ---------- 5. static props: floor, grid, exit ----------
+    const floor = new THREE.Mesh(
+      new THREE.PlaneGeometry(request.floor_w_m, request.floor_d_m),
+      new THREE.MeshStandardMaterial({ color: 0x2d2d44 }));
+    floor.rotation.x = -Math.PI / 2;                       // lie flat (Y-up world)
+    floor.position.set(request.floor_w_m / 2, 0, request.floor_d_m / 2);
+    scene.add(floor);
+
+    const grid = new THREE.GridHelper(20, 40, 0x444466, 0x333355);
+    grid.position.set(10, 0.01, 10);                       // 0.5 m squares
+    scene.add(grid);
+
+    const [ex0, ez0, ex1, ez1] = request.exit_zone;
+    const exit = new THREE.Mesh(
+      new THREE.BoxGeometry(ex1 - ex0, 0.05, ez1 - ez0),
+      new THREE.MeshStandardMaterial({ color: 0xff3333 }));
+    exit.position.set((ex0 + ex1) / 2, 0.03, (ez0 + ez1) / 2);
+    scene.add(exit);
+
+    // ---------- 6. fetch the layout, raise the shelves ----------
+    const SHELF_HEIGHT = 2.2;
+
+    async function loadLayout() {
+      const resp = await fetch("/api/v1/optimize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(request),
+      });
+      const layout = await resp.json();
+
+      layout.shelves.forEach(s => {
+        const geo = new THREE.BoxGeometry(s.w, SHELF_HEIGHT, s.d);
+        const mat = new THREE.MeshStandardMaterial(
+          { color: s.rotated ? 0x4ea8de : 0x57cc99 });     // blue = rotated
+        const mesh = new THREE.Mesh(geo, mat);
+        // s.x/s.z = front-left corner; mesh.position = the box's CENTRE
+        mesh.position.set(s.x + s.w / 2, SHELF_HEIGHT / 2, s.z + s.d / 2);
+        mesh.userData = { id: s.id, rotated: s.rotated };  // tag for clicks
+        scene.add(mesh);
+      });
+
+      document.getElementById("info").textContent =
+        `${layout.status} — placed ${layout.placed_count}/${layout.total_requested}` +
+        ` · drag = orbit · scroll = zoom · click a shelf`;
+    }
+    loadLayout();
+
+    // ---------- 7. click a shelf → highlight it + show its id ----------
+    const raycaster = new THREE.Raycaster();
+    let selected = null;
+
+    window.addEventListener("click", (e) => {
+      const mouse = new THREE.Vector2(
+        (e.clientX / window.innerWidth) * 2 - 1,
+        -(e.clientY / window.innerHeight) * 2 + 1);
+      raycaster.setFromCamera(mouse, camera);
+
+      const hits = raycaster.intersectObjects(scene.children, true);
+      console.log("click hits:", hits.map(h => h.object.userData.id ?? h.object.type));
+
+      const hit = hits.find(h => h.object.userData.id);
+      if (!hit) return;
+
+      if (selected) selected.material.emissive.set(0x000000);  // un-highlight old
+      selected = hit.object;
+      selected.material.emissive.set(0xffaa00);                // glow orange 🔶
+
+      const u = selected.userData;
+      document.getElementById("info").textContent =
+        `🔶 ${u.id} — rotated: ${u.rotated}`;
+    });
+
+    // ---------- 8. keep painting ----------
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    animate();
+  </script>
+</body>
+</html>
