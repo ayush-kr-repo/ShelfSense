@@ -1,4 +1,4 @@
-from phase3 import solve_layout
+from app.phase3 import solve_layout
 
 shelves = [{"id": f"S{i}", "w": 2.0, "d": 0.6} for i in range(12)]
 

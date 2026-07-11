@@ -1,5 +1,5 @@
-from schemas import Warehouse, Shelf
-from schemas import Analytics
+from app.schemas import Warehouse, Shelf
+from app.schemas import Analytics
 
 def shelf_volume(shelf: Shelf) -> float:
     """Volume a shelf could hold in cubic metres = w x h x d"""
@@ -82,9 +82,9 @@ def score_expansion_readiness(wh: Warehouse) -> float:
 
 def score_safety_compliance(wh: Warehouse) -> float:
     """Page 9 wants aisle-width (<80cm) and heavy-SKU-on-top checks.
-    Our Phase 1 stub doesn't provide aisle widths or SKU weights yet,
+    Our app.phase 1 stub doesn't provide aisle widths or SKU weights yet,
     so we return a neutral placeholder rather than fake a precise number.
-    TODO: compute for real once Phase 1 supplies aisle + weight data.
+    TODO: compute for real once app.phase 1 supplies aisle + weight data.
     """
     return 60.0
 
@@ -130,7 +130,7 @@ def generate_recommendations(wh: Warehouse) -> list[dict]:
     return recs
 
 def run_phase2(wh: Warehouse) -> Analytics:
-    """Full phase 2: Take a Warehouse, return its Analytics."""
+    """Full app.phase 2: Take a Warehouse, return its Analytics."""
     return Analytics(
         warehouse_id=wh.warehouse_id,
         sur=compute_sur(wh),

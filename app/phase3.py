@@ -1,5 +1,5 @@
 from ortools.sat.python import cp_model
-from schemas import OptimizeRequst, Layout
+from app.schemas import OptimizeRequst, Layout
 
 def solve_layout(floor_w_m, floor_d_m, shelves, cell_m=0.5,
                  aisle_m=0.9, exit_zone=None, time_limit_s=10):

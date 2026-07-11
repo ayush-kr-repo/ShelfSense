@@ -104,7 +104,7 @@ class ShelfSpec(BaseModel):
 
 
 class OptimizeRequst(BaseModel):
-    """The user's constraint form - phase 3's input."""
+    """The user's constraint form - app.phase 3's input."""
     floor_w_m: float
     floor_d_m: float
     shelves: list[ShelfSpec]
@@ -123,7 +123,7 @@ class PlacedShelf(BaseModel):
     rotated:bool
 
 class Layout(BaseModel):
-    """Phase 3's output: the designed layout"""
+    """app.phase 3's output: the designed layout"""
     layout_id: Optional[int] = None
     status: str         # OPTIMAL/FEASIBLE/INFEASIBLE
     placed_count:int

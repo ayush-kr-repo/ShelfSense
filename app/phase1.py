@@ -1,7 +1,7 @@
-from schemas import Warehouse
+from app.schemas import Warehouse
 
 def run_phase1(warehouse_id: str) -> Warehouse:
-    """Phase 1 : photos -> Warehouse
+    """app.phase 1 : photos -> Warehouse
     
     Eventually runs YOLO + SAM + scale on real images. For now it returns
     a hand-built valid Warehouse so the rest of the system can run.
