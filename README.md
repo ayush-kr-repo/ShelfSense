@@ -108,7 +108,7 @@ static/         # Three.js 3D twin
 - [x] Persistence — SQLite + Alembic
 - [ ] Real Phase 1 vision — fine-tuned YOLOv8 + SAM
 - [x] Test suite (pytest)
-- [ ] JWT auth + user scoping
+- [x] JWT auth + user scoping
 - [ ] React dashboard
 - [ ] Postgres + docker-compose deployment
 ```
