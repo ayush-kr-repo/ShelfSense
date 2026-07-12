@@ -129,3 +129,11 @@ class Layout(BaseModel):
     placed_count:int
     total_requested:int
     shelves: list[PlacedShelf]
+
+class UserCreate(BaseModel):
+    email : str
+    password: str
+
+class UserOut(BaseModel):
+    id: int
+    email: str
