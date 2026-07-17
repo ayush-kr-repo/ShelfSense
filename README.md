@@ -106,7 +106,7 @@ static/         # Three.js 3D twin
 - [x] 3D digital twin (Three.js)
 - [x] Async pipeline — Celery + Redis, task polling
 - [x] Persistence — SQLite + Alembic
-- [ ] Real Phase 1 vision — fine-tuned YOLOv8 + SAM
+- [x] Real Phase 1 vision — fine-tuned YOLOv8 + SAM
 - [x] Test suite (pytest)
 - [x] JWT auth + user scoping
 - [ ] React dashboard
