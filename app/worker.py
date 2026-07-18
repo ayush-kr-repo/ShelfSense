@@ -18,7 +18,7 @@ def run_analysis(task_id:int, warehouse_id:str):
     try:
         task.status = "running"; task.progress = 10; db.commit()
 
-        wh = run_app.phase1(warehouse_id)        # someday: real YOLO/SAM, minutes
+        wh = run_app.phase1(warehouse_id, "ml/test_warehouse.jpg")        # TODO : real uploads
         time.sleep(2)                        # simulate slow CV so you can WATCH progress
         task.progress = 60; db.commit()
 

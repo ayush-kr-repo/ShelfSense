@@ -9,8 +9,11 @@ from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.models import UserRecord
 
-# -- config --
-SECRET_KEY = "dev-secret-change-me"
+import os
+from dotenv import load_dotenv
+
+load_dotenv()                                   # reads .env into the environment
+SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-change-me")
 ALGORITHM = "HS256"
 TOKEN_LIFETIME_MIN = 30
 
