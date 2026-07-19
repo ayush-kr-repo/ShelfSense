@@ -26,7 +26,8 @@ def zone_class_for(occupancy: float) -> str:
     return "high"
 
 
-def run_phase1(warehouse_id: str, image_path: str) -> Warehouse:
+def run_phase1(warehouse_id: str, image_path: str,
+               px_per_m: float | None = None) -> Warehouse:
     """Phase 1, for real: image -> YOLO detections -> Warehouse JSON."""
     results = get_model()(image_path)
     r = results[0]
@@ -42,6 +43,7 @@ def run_phase1(warehouse_id: str, image_path: str) -> Warehouse:
         elif name == "box":
             boxes_px.append(xyxy)
 
+    f = px_per_m if px_per_m else 100.0
     shelves = []
     for i, (s, conf) in enumerate(shelves_px):
         sx1, sy1, sx2, sy2 = s
@@ -57,10 +59,9 @@ def run_phase1(warehouse_id: str, image_path: str) -> Warehouse:
         shelves.append(Shelf(
             id=f"S-{i}",
             pixel_position={"x": int(sx1), "y": int(sy1)},
-            # relative mode: no metres exist — px/100 keeps numbers readable
-            position={"x": sx1 / 100, "y": 0.0, "z": sy1 / 100},
-            estimated_dims={"w": (sx2 - sx1) / 100,
-                            "h": (sy2 - sy1) / 100, "d": 0.6},
+            position={"x": sx1 / f, "y": 0.0, "z": sy1 / f},
+            estimated_dims={"w": (sx2 - sx1) / f,
+                            "h": (sy2 - sy1) / f, "d": 0.6},
             occupancy_pct=round(occupancy, 2),
             box_count=len(inside),
             capacity_estimate=max(len(inside), 1),
@@ -71,8 +72,12 @@ def run_phase1(warehouse_id: str, image_path: str) -> Warehouse:
     return Warehouse(
         warehouse_id=warehouse_id,
         image_count=1,
-        scale={"mode": "relative", "confidence": 0.3},   # honest: no metres yet
-        dimensions=None,                                  # page 7 rule: relative -> null
+        scale=(
+            {"mode": "reference", "px_per_m": px_per_m, "confidence": 0.7}
+            if px_per_m else
+            {"mode": "relative", "confidence": 0.3}
+        ),
+        dimensions=None,                                  
         shelves=shelves,
         floor_plan={"total_area": float(img_w * img_h), "used_area": 0.0},
         metadata={"model_versions": {"yolo": "v8n-shelfsense-v2"},

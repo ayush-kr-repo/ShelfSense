@@ -24,13 +24,15 @@ def health_check():
 
 @app.get("/api/v1/analytics/{warehouse_id}", response_model=Analytics)
 def get_analytics(warehouse_id: str,
+                  px_per_m: float | None = None,
                   user: UserRecord = Depends(get_current_user)):
     """Run app.phase 1 + app.phase 2 for a warehouse and return the evaluation."""
     wh = run_phase1(warehouse_id, "ml/test_warehouse.jpg")     # TODO : real uploads
     return run_phase2(wh)
 
 @app.get("/api/v1/warehouse/{warehouse_id}", response_model=Warehouse)
-def get_warehouse(warehouse_id: str, 
+def get_warehouse(warehouse_id: str,
+                  px_per_m: float | None = None, 
                   user: UserRecord = Depends(get_current_user)):
     return run_phase1(warehouse_id, "ml/test_warehouse.jpg")    # TODO : real uploads
 
