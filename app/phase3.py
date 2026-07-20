@@ -1,5 +1,5 @@
 from ortools.sat.python import cp_model
-from app.schemas import OptimizeRequst, Layout
+from app.schemas import OptimizeRequest, Layout
 
 def solve_layout(floor_w_m, floor_d_m, shelves, cell_m=0.5,
                  aisle_m=0.9, exit_zone=None, time_limit_s=10):
@@ -83,7 +83,7 @@ def solve_layout(floor_w_m, floor_d_m, shelves, cell_m=0.5,
             })
     return solver.StatusName(status), layout
 
-def run_phase3(req: OptimizeRequst) -> Layout:
+def run_phase3(req: OptimizeRequest) -> Layout:
     status, layout = solve_layout(
         floor_w_m=req.floor_w_m,
         floor_d_m=req.floor_d_m,

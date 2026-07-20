@@ -103,7 +103,7 @@ class ShelfSpec(BaseModel):
     d: float = Field(gt=0)
 
 
-class OptimizeRequst(BaseModel):
+class OptimizeRequest(BaseModel):
     """The user's constraint form - app.phase 3's input."""
     floor_w_m: float
     floor_d_m: float
