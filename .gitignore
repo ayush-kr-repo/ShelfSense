@@ -12,3 +12,5 @@ wheels/
 
 # Local database
 shelfsense.db
+
+uploads/
