@@ -8,6 +8,7 @@ from app.schemas import Warehouse, Analytics
 from app.phase1 import run_phase1
 from app.phase2 import run_phase2
 from app.worker import run_analysis
+from app.models import WarehouseRecord
 
 import re
 import shutil
@@ -69,10 +70,30 @@ def get_task(task_id: int, db: Session = Depends(get_db)):
 @router.post("/warehouse/{warehouse_id}/upload")
 def upload_image(warehouse_id: str,
                  file: UploadFile = File(...),
+                 db: Session = Depends(get_db),
                  user: UserRecord = Depends(get_current_user)):
     if not (file.content_type or "").startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image")
     dest = UPLOAD_DIR / f"{safe_id(warehouse_id)}.jpg"
     with open(dest, "wb") as out:
         shutil.copyfileobj(file.file, out)      # stream bytes → disk
+    record = db.get(WarehouseRecord, warehouse_id)
+    if record is None:
+        record = WarehouseRecord(id=warehouse_id, owner_id=user.id,
+                                 name = warehouse_id, image_path=str(dest))
+        db.add(record)
+    else:
+        record.image_path = str(dest)
+    db.commit()
     return {"warehouse_id": warehouse_id, "saved": file.filename}
+
+@router.get("/warehouses")
+def list_warehouses(db: Session = Depends(get_db),
+                    user: UserRecord = Depends(get_current_user)):
+    rows = (db.query(WarehouseRecord)
+              .filter(WarehouseRecord.owner_id == user.id)      # ← USER SCOPING
+              .order_by(WarehouseRecord.created_at.desc())
+              .all())
+    return [{"id": r.id, "name": r.name,
+             "image_path": r.image_path,
+             "created_at": r.created_at} for r in rows]

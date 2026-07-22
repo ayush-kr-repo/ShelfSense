@@ -3,6 +3,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
 from datetime import datetime, timezone
 from sqlalchemy import DateTime
+from sqlalchemy import String, Integer, JSON, DateTime, ForeignKey
 
 class LayoutRecord(Base):
     __tablename__ = "layouts"
@@ -30,4 +31,12 @@ class UserRecord(Base):
     hashed_password: Mapped[str] = mapped_column(String)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
 
-    
+class WarehouseRecord(Base):
+    __tablename__="warehouses"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    owner_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), index=True)
+    name: Mapped[str] = mapped_column(String)
+    image_path: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc))
