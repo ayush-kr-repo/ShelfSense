@@ -6,22 +6,17 @@ ShelfSense transforms warehouse photos into a structured digital model (Phase 1)
 
 **Status:** The complete pipeline runs end-to-end on real uploaded warehouse images. A fine-tuned YOLOv8 object detector (trained on a custom warehouse dataset) powers perception, while analytics, optimization, asynchronous processing, database persistence, JWT authentication, and the 3D visualization complete the workflow. Detection currently performs best on pallets, with shelf and box accuracy improving as additional training data is collected. The system can be upgraded simply by replacing the YOLO model weights.
 
+![ShelfSense 3D digital twin](docs/twin.png)
+
 ---
 
 ## ShelfSense Pipeline
 
 ```mermaid
 flowchart LR
-    A[Warehouse Photos]
-    -->|"Phase 1 • Fine-Tuned YOLOv8"|
-    B[Warehouse JSON Contract]
-
-    B -->|"Phase 2 • Analytics"|
-    C[Health Score + Recommendations]
-
-    B -->|"Phase 3 • OR-Tools CP-SAT"|
-    D[Optimized Warehouse Layout]
-
+    A[Warehouse Photos] -->|"Phase 1 · Fine-Tuned YOLOv8"| B[Warehouse JSON Contract]
+    B -->|"Phase 2 · Analytics"| C[Health Score + Recommendations]
+    B -->|"Phase 3 · OR-Tools CP-SAT"| D[Optimized Warehouse Layout]
     D --> E[Three.js Interactive 3D Digital Twin]
 ```
 
@@ -297,13 +292,13 @@ tests/                   # Pytest suite
 - [x] SQLite persistence
 - [x] Alembic migrations
 - [x] Fine-tuned YOLOv8 warehouse detector
-- [x]Comprehensive pytest test suite
+- [x] Comprehensive pytest test suite
 - [x] JWT authentication
 - [x] User-scoped warehouse management
 - [x] Image upload support
 - [x] Pixel-to-metre scaling (Tier 2)
-- [] React analytics dashboard
-- [] PostgreSQL migration
-- [] Docker Compose deployment
+- [ ] React analytics dashboard
+- [ ] PostgreSQL migration
+- [ ] Docker Compose deployment
 
 ---
