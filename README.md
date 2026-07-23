@@ -1,114 +1,309 @@
 # ShelfSense AI 📦
 
-> An AI warehouse digital twin: photograph your warehouse, get health analytics, a
-> mathematically-optimized shelf layout, and an interactive 3D view — before moving
-> a single real shelf.
+> An AI warehouse digital twin: photograph your warehouse, get health analytics, a mathematically optimized shelf layout, and an interactive 3D view — before moving a single real shelf.
 
-ShelfSense turns warehouse photos into a structured digital model (Phase 1), scores how
-well the space is used and recommends fixes (Phase 2), then uses constraint solving to
-design a better layout (Phase 3) and renders it as a browser-based 3D twin.
+ShelfSense transforms warehouse photos into a structured digital model (Phase 1), evaluates warehouse efficiency and provides actionable recommendations (Phase 2), optimizes the warehouse layout using mathematical constraint solving (Phase 3), and finally renders the optimized warehouse as an interactive browser-based 3D digital twin.
 
-**Honest status:** the computer-vision step (Phase 1) is currently a stub that returns
-sample data — the contract, analytics, optimizer, async pipeline, persistence, and 3D
-viewer all run end-to-end and are swap-ready for the real YOLO/SAM detector.
+**Status:** The complete pipeline runs end-to-end on real uploaded warehouse images. A fine-tuned YOLOv8 object detector (trained on a custom warehouse dataset) powers perception, while analytics, optimization, asynchronous processing, database persistence, JWT authentication, and the 3D visualization complete the workflow. Detection currently performs best on pallets, with shelf and box accuracy improving as additional training data is collected. The system can be upgraded simply by replacing the YOLO model weights.
 
-![ShelfSense 3D digital twin](docs/twin.png)
+---
 
-## How it works
+## ShelfSense Pipeline
 
 ```mermaid
 flowchart LR
-    A[Warehouse photos] -->|"Phase 1 · YOLO + SAM (stubbed)"| B[Warehouse JSON]
-    B -->|Phase 2 · analytics| C[Health score + recommendations]
-    B -->|Phase 3 · OR-Tools CP-SAT| D[Optimized layout]
-    D --> E[Three.js 3D twin]
+    A[Warehouse Photos]
+    -->|"Phase 1 • Fine-Tuned YOLOv8"|
+    B[Warehouse JSON Contract]
+
+    B -->|"Phase 2 • Analytics"|
+    C[Health Score + Recommendations]
+
+    B -->|"Phase 3 • OR-Tools CP-SAT"|
+    D[Optimized Warehouse Layout]
+
+    D --> E[Three.js Interactive 3D Digital Twin]
 ```
 
-Everything hangs off one **JSON contract** (Pydantic): Phase 1 produces it, Phase 2
-consumes it, Phase 3 extends it, and the 3D twin renders it.
+Everything in ShelfSense revolves around a single validated JSON contract (built using Pydantic).
 
-- **Phase 2 — Evaluation:** Storage Utilization Rate, a 6-dimension weighted Health
-  Score (0–100 + band), and rule-based recommendations (consolidate under-filled
-  shelves, reclaim large empty regions).
-- **Phase 3 — Optimization:** a CP-SAT model that places shelves with no overlaps,
-  enforced aisle clearance, an exit keep-out zone, and optional 90° rotation —
-  maximizing the number of shelves placed (solves the reference scenario to OPTIMAL).
-- **Async pipeline:** slow jobs run in a Celery worker via Redis; the API returns a
-  `task_id` instantly and clients poll for progress.
+- Phase 1 generates the contract.
+- Phase 2 consumes it for analytics.
+- Phase 3 extends it with optimized shelf placements.
+- The Three.js viewer renders the final warehouse directly from this JSON.
 
-## Tech stack
+---
 
-| Layer | Tools |
-|---|---|
-| API | FastAPI · Pydantic (contract validation at every border) |
+# Phase 1 — Warehouse Perception
+
+A fine-tuned **YOLOv8** model detects:
+
+- Shelves
+- Boxes
+- Pallets
+
+from a single warehouse photograph.
+
+The detected objects are converted into structured warehouse metadata including:
+
+- Shelf positions
+- Bounding boxes
+- Occupancy estimation
+- Warehouse dimensions
+- Object relationships
+
+Occupancy percentages are computed geometrically.
+
+When one real-world reference measurement is provided (for example, a known shelf width), ShelfSense converts all pixel measurements into real-world metres.
+
+---
+
+# Phase 2 — Warehouse Analytics
+
+The generated warehouse model is analyzed to determine warehouse health.
+
+Analytics include:
+
+- Storage Utilization Rate (SUR)
+- Six-dimensional weighted Health Score (0–100)
+- Health category (Poor, Fair, Good, Excellent)
+- Rule-based warehouse recommendations
+
+Example recommendations include:
+
+- Consolidate underutilized shelves
+- Reclaim large unused floor areas
+- Improve storage distribution
+- Increase warehouse efficiency
+
+---
+
+# Phase 3 — Layout Optimization
+
+Warehouse optimization is performed using **Google OR-Tools CP-SAT**.
+
+The optimizer enforces real warehouse constraints including:
+
+- No shelf overlaps
+- Minimum aisle clearance
+- Exit keep-out zones
+- Optional 90° shelf rotation
+
+Optimization objective:
+
+> Maximize the number of shelves that can be placed while satisfying every constraint.
+
+The resulting optimized layout is exported back into the common JSON contract.
+
+---
+
+# Interactive 3D Digital Twin
+
+The optimized warehouse layout is rendered using **Three.js**.
+
+Features include:
+
+- Orbit camera
+- Zoom
+- Pan
+- Clickable shelves
+- Accurate layout visualization
+- Browser-based rendering
+
+No desktop software is required.
+
+---
+
+# Asynchronous Processing Pipeline
+
+Long-running operations execute asynchronously using:
+
+- Celery
+- Redis
+
+Workflow:
+
+1. Client uploads warehouse image.
+2. API immediately returns a `task_id`.
+3. Celery performs detection, analytics, and optimization.
+4. Client polls task status until completion.
+
+Task states include:
+
+- Queued
+- Running
+- Completed
+- Failed
+
+---
+
+# Technology Stack
+
+| Layer | Technology |
+|--------|------------|
+| API | FastAPI |
+| Validation | Pydantic |
+| Computer Vision | Fine-Tuned Ultralytics YOLOv8 |
 | Optimization | Google OR-Tools CP-SAT |
-| Persistence | SQLite · SQLAlchemy · Alembic migrations |
-| Background jobs | Celery · Redis (in Docker) |
-| 3D twin | Three.js (browser-side, built from layout JSON) |
-| Tooling | uv · Docker Desktop |
+| Database | SQLite |
+| ORM | SQLAlchemy |
+| Database Migration | Alembic |
+| Background Processing | Celery |
+| Message Broker | Redis |
+| Authentication | JWT (python-jose) |
+| Password Hashing | bcrypt |
+| 3D Visualization | Three.js |
+| Package Manager | uv |
+| Containerization | Docker Desktop |
 
-## Quickstart
+---
 
-Prerequisites: [uv](https://docs.astral.sh/uv/), [Docker Desktop](https://www.docker.com/products/docker-desktop/), Python 3.13.
+# Quickstart
+
+## Prerequisites
+
+- Python 3.13
+- uv
+- Docker Desktop
+
+Clone the repository:
 
 ```bash
 git clone https://github.com/ayush-kr-repo/ShelfSense.git
+
 cd ShelfSense
+
 uv sync
+```
 
-# 1. start the message queue
-docker run -d -p 6379:6379 --name shelfsense-redis redis
+Start Redis:
 
-# 2. create the database
+```bash
+docker run -d \
+-p 6379:6379 \
+--name shelfsense-redis \
+redis
+```
+
+Create the database:
+
+```bash
 uv run alembic upgrade head
+```
 
-# 3. start the API (terminal 1)
+Start the FastAPI server:
+
+```bash
 uv run uvicorn app.main:app --reload
-
-# 4. start the background worker (terminal 2)
-uv run celery -A app.worker.celery_app worker --loglevel=info --pool=solo
 ```
 
-Then open:
-- **http://127.0.0.1:8000/docs** — interactive API docs
-- **http://127.0.0.1:8000/static/twin.html** — the 3D twin (orbit, zoom, click shelves)
+Start the Celery worker:
 
-## API
-
-| Endpoint | In plain words |
-|---|---|
-| `POST /api/v1/analyze` | *"Start studying my warehouse"* — enqueues the pipeline, returns a `task_id` instantly |
-| `GET /api/v1/task/{id}` | *"Is my order ready?"* — poll status + progress (queued → running → done) |
-| `GET /api/v1/warehouse/{id}` | The facts — shelves, positions, occupancy (Phase 1 output) |
-| `GET /api/v1/analytics/{id}` | The verdict — health score, SUR, recommendations (Phase 2) |
-| `POST /api/v1/optimize` | The blueprint — constraints in, solved layout out (saved with an id) |
-| `GET /api/v1/layout/{id}` | The archive — retrieve any previously solved layout |
-
-## Project structure
-
-```
-app/            # application package
-├── main.py     # API routes
-├── schemas.py  # the JSON contract (Pydantic)
-├── models.py   # DB tables (SQLAlchemy)
-├── database.py # engine + sessions
-├── worker.py   # Celery background tasks
-└── phase1-3.py # perception (stub) · evaluation · optimization
-alembic/        # schema migrations
-static/         # Three.js 3D twin
+```bash
+uv run celery \
+-A app.worker.celery_app \
+worker \
+--loglevel=info \
+--pool=solo
 ```
 
-## Roadmap
+---
 
-- [x] JSON contract (Pydantic, locked)
-- [x] Phase 2 analytics — SUR, health score, recommendations
-- [x] Phase 3 optimizer — CP-SAT with aisles, exit keep-out, rotation
-- [x] 3D digital twin (Three.js)
-- [x] Async pipeline — Celery + Redis, task polling
-- [x] Persistence — SQLite + Alembic
-- [x] Real Phase 1 vision — fine-tuned YOLOv8 + SAM
-- [x] Test suite (pytest)
-- [x] JWT auth + user scoping
-- [ ] React dashboard
-- [ ] Postgres + docker-compose deployment
+# Open in Browser
+
+Interactive API Documentation
+
 ```
+http://127.0.0.1:8000/docs
+```
+
+3D Digital Twin
+
+```
+http://127.0.0.1:8000/static/twin.html
+```
+
+---
+
+# REST API
+
+| Endpoint | Description |
+|-----------|-------------|
+| **POST /api/v1/analyze** | Upload a warehouse image and start the complete pipeline. Returns a `task_id` immediately. |
+| **GET /api/v1/task/{id}** | Check asynchronous task progress. |
+| **GET /api/v1/warehouse/{id}** | Retrieve Phase 1 warehouse detection output. |
+| **GET /api/v1/analytics/{id}** | Retrieve warehouse health analytics. |
+| **POST /api/v1/optimize** | Optimize warehouse layout using CP-SAT. |
+| **GET /api/v1/layout/{id}** | Retrieve a previously generated optimized layout. |
+| **POST /api/v1/warehouse/{id}/upload** | Upload a warehouse image. |
+| **GET /api/v1/warehouses** | List warehouses belonging to the authenticated user. |
+| **POST /api/v1/auth/register** | Register a new account. |
+| **POST /api/v1/auth/login** | Authenticate and receive a JWT token. |
+
+All warehouse endpoints require JWT authentication.
+
+To enable real-world metre measurements, append:
+
+```
+?px_per_m=<value>
+```
+
+to warehouse and analytics endpoints.
+
+---
+
+# Project Structure
+
+```text
+app/
+├── main.py              # FastAPI application entry point
+├── api/                 # REST API routes
+│   ├── warehouse.py
+│   ├── optimize.py
+│   └── auth.py
+├── schemas.py           # Shared JSON contract (Pydantic)
+├── models.py            # SQLAlchemy models
+├── database.py          # Database engine and sessions
+├── auth.py              # JWT authentication
+├── scale.py             # Pixel-to-metre conversion
+├── worker.py            # Celery worker
+└── phase1-3.py          # Perception, analytics, optimization
+
+alembic/                 # Database migrations
+
+ml/                      # Fine-tuned YOLO weights and training notebooks
+
+static/                  # Three.js digital twin
+
+tests/                   # Pytest suite
+```
+
+---
+
+# Roadmap
+
+- [x] Locked JSON contract using Pydantic
+- [x] Warehouse analytics engine
+- [x] Storage Utilization Rate (SUR)
+- [x] Health Score generation
+- [x] Rule-based warehouse recommendations
+- [x] CP-SAT warehouse optimizer
+- [x] Aisle clearance constraints
+- [x] Exit keep-out zones
+- [x] Shelf rotation support
+- [x] Interactive Three.js digital twin
+- [x] Asynchronous Celery pipeline
+- [x] Redis task queue
+- [x] SQLite persistence
+- [x] Alembic migrations
+- [x] Fine-tuned YOLOv8 warehouse detector
+- [x]Comprehensive pytest test suite
+- [x] JWT authentication
+- [x] User-scoped warehouse management
+- [x] Image upload support
+- [x] Pixel-to-metre scaling (Tier 2)
+- [] React analytics dashboard
+- [] PostgreSQL migration
+- [] Docker Compose deployment
+
+---
