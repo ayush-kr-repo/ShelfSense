@@ -297,7 +297,7 @@ tests/                   # Pytest suite
 - [x] User-scoped warehouse management
 - [x] Image upload support
 - [x] Pixel-to-metre scaling (Tier 2)
-- [ ] React analytics dashboard
+- [x] React analytics dashboard
 - [ ] PostgreSQL migration
 - [ ] Docker Compose deployment
 
