@@ -9,6 +9,7 @@ from app.phase1 import run_phase1
 from app.phase2 import run_phase2
 from app.worker import run_analysis
 from app.models import WarehouseRecord
+from app.heatmap import generate_heatmap
 
 import re
 import shutil
@@ -22,6 +23,8 @@ DEMO_IMAGE = "ml/test_warehouse.jpg"
 UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
 
+HEATMAP_DIR = Path("static/heatmaps")
+HEATMAP_DIR.mkdir(parents=True, exist_ok=True)
 
 def safe_id(warehouse_id: str) -> str:
     """Reject anything that could escape the uploads folder (path traversal)."""
@@ -48,8 +51,12 @@ def get_analytics(warehouse_id: str,
                   px_per_m: float | None = None,
                   user: UserRecord = Depends(get_current_user)):
     wh = run_phase1(warehouse_id, image_for(warehouse_id), px_per_m)
-    return run_phase2(wh)
+    analytics = run_phase2(wh)
 
+    out = HEATMAP_DIR / f"{safe_id(warehouse_id)}.png"
+    generate_heatmap(wh, str(out))      # Draw + save PNG
+    analytics.heatmap_ref = f"/static/heatmaps/{warehouse_id}.png"      # served by static mount
+    return analytics
 
 @router.post("/analyze")
 def analyze(warehouse_id: str = "wh_demo", db: Session = Depends(get_db)):

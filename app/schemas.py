@@ -96,6 +96,7 @@ class Analytics(BaseModel):
     sur: float
     health: HealthResult
     recommendations: list[Recommendation]
+    heatmap_ref: str | None = None
 
 class ShelfSpec(BaseModel):
     id: str

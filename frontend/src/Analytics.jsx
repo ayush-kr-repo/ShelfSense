@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { api } from "./api";
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer } from "recharts";
 import { motion, useSpring, useTransform } from "framer-motion";
+import Optimize from "./Optimize";
 
 const bandColor = {
   Excellent: "text-green-400", Good: "text-blue-400",
@@ -66,6 +67,14 @@ export default function Analytics({ id, onBack }) {
           ))}
         </div>
       )}
+    {data.heatmap_ref && (
+    <div className="bg-slate-800 rounded-2xl p-6 mt-8">
+        <h2 className="text-xl font-semibold mb-3">Occupancy Heatmap</h2>
+        <img src={`http://localhost:8000${data.heatmap_ref}?t=${Date.now()}`}
+            alt="Occupancy heatmap" className="rounded-lg max-w-full" />
+    </div>
+    )}
+      <Optimize />
     </Shell>
   );
 }
