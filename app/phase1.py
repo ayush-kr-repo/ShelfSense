@@ -4,9 +4,10 @@ from ultralytics import YOLO
 
 from app.schemas import Warehouse, Shelf
 
-WEIGHTS = Path("ml/weights/best.pt")
+WEIGHTS = Path("ml/weights/best_s.pt")
 _model = None                      # loaded once, lazily (it's ~6MB + torch startup)
 
+STANDARD_SHELF_FOOTPRINT_M2 = 1.2   # a typical shelf footprint (2.0 × 0.6 m)
 
 def get_model() -> YOLO:
     global _model
@@ -27,7 +28,8 @@ def zone_class_for(occupancy: float) -> str:
 
 
 def run_phase1(warehouse_id: str, image_path: str,
-               px_per_m: float | None = None) -> Warehouse:
+               px_per_m: float | None = None,
+               dimensions: dict | None = None) -> Warehouse:
     """Phase 1, for real: image -> YOLO detections -> Warehouse JSON."""
     results = get_model()(image_path)
     r = results[0]
@@ -69,6 +71,17 @@ def run_phase1(warehouse_id: str, image_path: str,
             confidence=round(conf, 2),
         ))
 
+    if dimensions:
+        total_area = dimensions["length"] * dimensions["width"]
+        used_area = round(len(shelves) * STANDARD_SHELF_FOOTPRINT_M2, 1)
+        dims_obj = {"length": dimensions["length"], "width": dimensions["width"],
+                    "height": dimensions.get("height", 4.0)}
+
+    else:
+        total_area = float(img_w * img_h)     # old pixel-area fallback
+        used_area = 0.0
+        dims_obj = None
+
     return Warehouse(
         warehouse_id=warehouse_id,
         image_count=1,
@@ -77,9 +90,9 @@ def run_phase1(warehouse_id: str, image_path: str,
             if px_per_m else
             {"mode": "relative", "confidence": 0.3}
         ),
-        dimensions=None,                                  
+        dimensions=dims_obj,                                  
         shelves=shelves,
-        floor_plan={"total_area": float(img_w * img_h), "used_area": 0.0},
+        floor_plan={"total_area": total_area, "used_area": used_area},
         metadata={"model_versions": {"yolo": "v8n-shelfsense-v2"},
                   "confidence_summary": 0.5},
     )

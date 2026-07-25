@@ -67,13 +67,24 @@ export default function Analytics({ id, onBack }) {
           ))}
         </div>
       )}
-    {data.heatmap_ref && (
-    <div className="bg-slate-800 rounded-2xl p-6 mt-8">
-        <h2 className="text-xl font-semibold mb-3">Occupancy Heatmap</h2>
-        <img src={`http://localhost:8000${data.heatmap_ref}?t=${Date.now()}`}
-            alt="Occupancy heatmap" className="rounded-lg max-w-full" />
-    </div>
-    )}
+      {(data.image_ref || data.heatmap_ref) && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
+          {data.image_ref && (
+            <div className="bg-slate-800 rounded-2xl p-6">
+              <h2 className="text-xl font-semibold mb-3">Uploaded Photo</h2>
+              <img src={`http://localhost:8000${data.image_ref}?t=${Date.now()}`}
+                   alt="Warehouse photo" className="rounded-lg max-w-full" />
+            </div>
+          )}
+          {data.heatmap_ref && (
+            <div className="bg-slate-800 rounded-2xl p-6">
+              <h2 className="text-xl font-semibold mb-3">Occupancy Heatmap</h2>
+              <img src={`http://localhost:8000${data.heatmap_ref}?t=${Date.now()}`}
+                   alt="Occupancy heatmap" className="rounded-lg max-w-full" />
+            </div>
+          )}
+        </div>
+      )}
       <Optimize />
     </Shell>
   );

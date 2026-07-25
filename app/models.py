@@ -38,5 +38,5 @@ class WarehouseRecord(Base):
     owner_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), index=True)
     name: Mapped[str] = mapped_column(String)
     image_path: Mapped[str | None] = mapped_column(String, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc))
+    dimensions: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))

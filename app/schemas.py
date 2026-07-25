@@ -97,12 +97,12 @@ class Analytics(BaseModel):
     health: HealthResult
     recommendations: list[Recommendation]
     heatmap_ref: str | None = None
+    image_ref: str | None = None
 
 class ShelfSpec(BaseModel):
     id: str
     w: float = Field(gt=0)
     d: float = Field(gt=0)
-
 
 class OptimizeRequest(BaseModel):
     """The user's constraint form - app.phase 3's input."""
@@ -138,3 +138,9 @@ class UserCreate(BaseModel):
 class UserOut(BaseModel):
     id: int
     email: str
+
+class WarehouseUpdate(BaseModel):
+    name: str | None = None
+    length_m: float | None = Field(None, gt=0)
+    width_m: float | None = Field(None, gt=0)
+    height_m: float | None = Field(None, gt=0)

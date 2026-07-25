@@ -23,6 +23,7 @@ app.include_router(optimize.router)
 app.include_router(auth.router)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 
 @app.get("/health")
