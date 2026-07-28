@@ -44,6 +44,7 @@ def image_for(warehouse_id: str) -> str:
 def get_warehouse(warehouse_id: str,
                   px_per_m: float | None = None,
                   user: UserRecord = Depends(get_current_user)):
+    owned_warehouse(warehouse_id, db, user)
     return run_phase1(warehouse_id, image_for(warehouse_id), px_per_m)
 
 
@@ -52,9 +53,9 @@ def get_analytics(warehouse_id: str,
                   px_per_m: float | None = None,
                   db: Session = Depends(get_db),
                   user: UserRecord = Depends(get_current_user)):
-    record = db.get(WarehouseRecord, warehouse_id)
-    dims = record.dimensions if record else None
-    manual = record.manual_occupancy if record else None
+    record = owned_warehouse(warehouse_id, db, user)
+    dims = record.dimensions
+    manual = record.manual_occupancy
     wh = run_phase1(warehouse_id, image_for(warehouse_id), px_per_m, dims)
     if manual is not None:
         apply_manual_occupancy(wh, manual)
