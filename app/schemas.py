@@ -39,6 +39,16 @@ class ZoneClass(str, Enum):
     medium = "medium"       # 0.50 - 0.80
     high = "high"           # > 0.80
 
+def zone_class_for(occupancy: float) -> str:
+    if occupancy < 0.20:
+        return "empty"
+    if occupancy < 0.50:
+        return "low"
+    if occupancy < 0.80:
+        return "medium"
+    return "high"
+
+
 class Scale(BaseModel):
     mode: ScaleMode
     px_per_m: Optional[float] = None
@@ -98,6 +108,11 @@ class Analytics(BaseModel):
     recommendations: list[Recommendation]
     heatmap_ref: str | None = None
     image_ref: str | None = None
+    occupancy_source: str = "ai"
+    shelf_count: int = 0
+    floor_dims: Dimensions | None = None
+
+
 
 class ShelfSpec(BaseModel):
     id: str
@@ -144,3 +159,4 @@ class WarehouseUpdate(BaseModel):
     length_m: float | None = Field(None, gt=0)
     width_m: float | None = Field(None, gt=0)
     height_m: float | None = Field(None, gt=0)
+    occupancy_pct: float | None = Field(None, ge=0, le=100)

@@ -267,6 +267,7 @@ app/
 alembic/                 # Database migrations
 
 ml/                      # Fine-tuned YOLO weights and training notebooks
+try_real_phase1.py
 
 static/                  # Three.js digital twin
 

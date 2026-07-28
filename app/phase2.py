@@ -1,5 +1,4 @@
-from app.schemas import Warehouse, Shelf
-from app.schemas import Analytics
+from app.schemas import Warehouse, Shelf, Analytics, zone_class_for 
 
 def shelf_volume(shelf: Shelf) -> float:
     """Volume a shelf could hold in cubic metres = w x h x d"""
@@ -15,6 +14,31 @@ def compute_sur(warehouse: Warehouse) -> float:
         return 0.0
     
     return round(occupied_vol/usable_vol * 100, 1)
+
+def apply_manual_occupancy(wh: Warehouse, pct: float) -> None:
+    """Replace CV occupancy guesses with the manager's own estimate.
+
+    Mutates wh in place so everything downstream (SUR, health, heatmap)
+    sees the corrected numbers.
+    """
+    frac = pct / 100
+    if wh.shelves:
+        for s in wh.shelves:
+            s.occupancy_pct = frac
+            s.zone_class = zone_class_for(frac)
+            s.box_count = round(frac * s.capacity_estimate)
+    else:
+        wh.shelves = [Shelf(
+            id="WH-ESTIMATE",
+            pixel_position={"x": 0, "y": 0},
+            position={"x": 0.0, "y": 0.0, "z": 0.0},
+            estimated_dims={"w": 1.0, "h": 1.0, "d": 1.0},
+            occupancy_pct=frac,
+            box_count=round(frac * 10),
+            capacity_estimate=10,
+            zone_class=zone_class_for(frac),
+            confidence=1.0,
+        )]
 
 HEALTH_WEIGHTS = {
     "storage_efficiency" : 0.30,
@@ -119,12 +143,19 @@ def generate_recommendations(wh: Warehouse) -> list[dict]:
             "impact": "Medium",
         })
 
-    free_area = wh.floor_plan.total_area - wh.floor_plan.used_area
-    if free_area >= LARGE_EMPTY_AREA_M2:
+    if wh.dimensions is not None:
+        free_area = wh.floor_plan.total_area - wh.floor_plan.used_area
+        if free_area >= LARGE_EMPTY_AREA_M2:
+            recs.append({
+                "condition": f"Large empty floor region (~{free_area:.0f} m2 unused)",
+                "recommendation": "Add vertical racks to convert floor space into storage capacity.",
+                "impact": "High",
+            })
+    else:
         recs.append({
-            "condition": f"Large empty floor region (~{free_area:.0f} m2 unused)",
-            "recommendation": "Add vertical racks to convert floor space into storage capacity.",
-            "impact": "High",
+            "condition": "Floor dimensions not set - space analysis unavailable",
+            "recommendation": "Set this warehouse's floor size (the pencil icon on its card) to unlock space recommendations.",
+            "impact": "Low",
         })
 
     return recs

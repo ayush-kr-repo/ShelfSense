@@ -3,6 +3,7 @@ from pathlib import Path
 from ultralytics import YOLO
 
 from app.schemas import Warehouse, Shelf
+from app.schemas import Warehouse, Shelf, zone_class_for
 
 WEIGHTS = Path("ml/weights/best_s.pt")
 _model = None                      # loaded once, lazily (it's ~6MB + torch startup)
@@ -14,17 +15,6 @@ def get_model() -> YOLO:
     if _model is None:
         _model = YOLO(str(WEIGHTS))
     return _model
-
-
-def zone_class_for(occupancy: float) -> str:
-    """Page 7 bands: <0.20 empty · 0.20-0.50 low · 0.50-0.80 medium · >0.80 high."""
-    if occupancy < 0.20:
-        return "empty"
-    if occupancy < 0.50:
-        return "low"
-    if occupancy < 0.80:
-        return "medium"
-    return "high"
 
 
 def run_phase1(warehouse_id: str, image_path: str,
