@@ -40,3 +40,4 @@ class WarehouseRecord(Base):
     image_path: Mapped[str | None] = mapped_column(String, nullable=True)
     dimensions: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    manual_occupancy: Mapped[float | None] = mapped_column(nullable=True)

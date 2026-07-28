@@ -2,11 +2,12 @@ import { useState } from "react";
 import { api } from "./api";
 import Twin from "./Twin";
 
-export default function Optimize({ warehouseId }) {
+export default function Optimize({ floorDims, currentShelves = 0 }) {
   const [form, setForm] = useState({
-    floorW: 10, floorD: 8,          // floor size in metres
-    shelfW: 2.0, shelfD: 0.6,       // one shelf's footprint
-    aisle: 0.9,                     // gap the solver keeps between shelves
+    floorW: floorDims?.length ?? 10,      // real dims when set, else defaults
+    floorD: floorDims?.width ?? 8,
+    shelfW: 2.0, shelfD: 0.6,
+    aisle: 0.9,
   });
   const [layout, setLayout] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -20,19 +21,17 @@ export default function Optimize({ warehouseId }) {
     setBusy(true);
     setError("");
     try {
-      // upper bound: how many shelves fit if we ignore aisles entirely.
-      // The solver will place fewer — its count is the real answer.
       const maxCandidates = Math.floor(
         (form.floorW * form.floorD) / (form.shelfW * form.shelfD)
       );
-      const count = Math.min(Math.max(maxCandidates, 1), 60); // cap: keep solve fast
+      const count = Math.min(Math.max(maxCandidates, 1), 60);
       const shelves = Array.from({ length: count }, (_, i) => ({
         id: `S${i}`, w: form.shelfW, d: form.shelfD,
       }));
       const req = {
         floor_w_m: form.floorW, floor_d_m: form.floorD,
-        shelves, aisle_m: form.aisle,
-        exit_zone: [0, 0, 1.5, 1.5],   // 1.5 m exit corner always kept clear
+        shelves, aisle_m: form.aisle, cell_m: 0.2,
+        exit_zone: [0, 0, 1.5, 1.5],
       };
       const result = await api("/api/v1/optimize", {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -44,15 +43,14 @@ export default function Optimize({ warehouseId }) {
     } finally { setBusy(false); }
   }
 
-  // capacity numbers derived from what the solver actually placed
-  const storageArea = layout
-    ? layout.shelves.reduce((sum, s) => sum + s.w * s.d, 0)
-    : 0;
-  const floorArea = form.floorW * form.floorD;
+  const fits = layout ? layout.placed_count : 0;
+  const delta = fits - currentShelves;
+  const shelfArea = layout && layout.shelves.length
+    ? layout.shelves[0].w * layout.shelves[0].d : 0;
 
   return (
     <div className="mt-10">
-      <h2 className="text-xl font-semibold mb-4">Layout Planner</h2>
+      <h2 className="text-xl font-semibold mb-4">Capacity Planner</h2>
 
       <div className="bg-slate-800 rounded-2xl p-6 mb-4">
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
@@ -62,6 +60,11 @@ export default function Optimize({ warehouseId }) {
           <Field label="Shelf depth (m)" value={form.shelfD} onChange={set("shelfD")} step="0.1" />
           <Field label="Aisle width (m)" value={form.aisle} onChange={set("aisle")} step="0.1" />
         </div>
+        {!floorDims && (
+          <p className="text-yellow-500/80 text-xs mt-3">
+            ⚠ No floor size saved for this warehouse — using defaults. Set it from the dashboard card for real numbers.
+          </p>
+        )}
         <button onClick={runOptimize} disabled={busy}
                 className="mt-4 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded-lg px-5 py-2 text-sm font-semibold">
           {busy ? "Solving…" : "⚡ Plan my layout"}
@@ -69,23 +72,26 @@ export default function Optimize({ warehouseId }) {
         {error && <p className="text-red-400 text-sm mt-2">{error}</p>}
       </div>
 
-      {layout ? (
+      {layout && (
         <>
           <div className="grid grid-cols-3 gap-4 mb-4">
-            <Stat label="Shelves that fit" value={layout.placed_count} />
-            <Stat label="Storage area" value={`${storageArea.toFixed(1)} m²`} />
-            <Stat label="Floor used" value={`${((storageArea / floorArea) * 100).toFixed(0)}%`} />
+            <Stat label="Shelves detected now (approx)" value={`~${currentShelves}`} />
+            <Stat label="This floor can fit" value={fits} />
+            {delta > 0 ? (
+              <Stat label="Room to grow" accent
+                    value={`+${delta} shelves ≈ +${(delta * shelfArea).toFixed(1)} m²`} />
+            ) : (
+              <Stat label="Capacity status" value="At solver capacity" />
+            )}
           </div>
           <p className="text-slate-500 text-xs mb-3">
-            Aisles of {form.aisle} m kept between shelves · exit corner kept clear ·
-            solver status: {layout.status}
+            <span className="text-green-400">■</span> existing (approx) ·{" "}
+            <span className="text-amber-400">■</span> room to grow ·
+            aisles {form.aisle} m · exit corner kept clear · solver: {layout.status}
           </p>
-          <Twin layout={layout.shelves} />
+          <Twin layout={layout.shelves} floorW={form.floorW} floorD={form.floorD}
+                existingCount={currentShelves} />
         </>
-      ) : (
-        <p className="text-slate-500 text-sm">
-          Enter your floor and shelf dimensions, then plan your layout.
-        </p>
       )}
     </div>
   );
@@ -101,10 +107,10 @@ function Field({ label, value, onChange, step = "1" }) {
   );
 }
 
-function Stat({ label, value }) {
+function Stat({ label, value, accent }) {
   return (
-    <div className="bg-slate-800 rounded-xl p-4 text-center">
-      <p className="text-2xl font-bold">{value}</p>
+    <div className={`rounded-xl p-4 text-center ${accent ? "bg-amber-500/10 ring-1 ring-amber-500/40" : "bg-slate-800"}`}>
+      <p className={`text-2xl font-bold ${accent ? "text-amber-400" : ""}`}>{value}</p>
       <p className="text-slate-400 text-xs mt-1">{label}</p>
     </div>
   );

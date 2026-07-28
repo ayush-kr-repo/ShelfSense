@@ -85,7 +85,7 @@ export default function Analytics({ id, onBack }) {
           )}
         </div>
       )}
-      <Optimize />
+      <Optimize floorDims={data.floor_dims} currentShelves={data.shelf_count} />
     </Shell>
   );
 }

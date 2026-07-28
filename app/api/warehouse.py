@@ -6,7 +6,7 @@ from app.models import TaskRecord, UserRecord
 from app.auth import get_current_user
 from app.schemas import Warehouse, Analytics
 from app.phase1 import run_phase1
-from app.phase2 import run_phase2
+from app.phase2 import run_phase2, apply_manual_occupancy
 from app.worker import run_analysis
 from app.models import WarehouseRecord
 from app.heatmap import generate_heatmap
@@ -54,14 +54,21 @@ def get_analytics(warehouse_id: str,
                   user: UserRecord = Depends(get_current_user)):
     record = db.get(WarehouseRecord, warehouse_id)
     dims = record.dimensions if record else None
+    manual = record.manual_occupancy if record else None
     wh = run_phase1(warehouse_id, image_for(warehouse_id), px_per_m, dims)
+    if manual is not None:
+        apply_manual_occupancy(wh, manual)
     analytics = run_phase2(wh)
+    if manual is not None:
+        analytics.occupancy_source = "manual"
 
     out = HEATMAP_DIR / f"{safe_id(warehouse_id)}.png"
     generate_heatmap(wh, str(out))      # Draw + save PNG
     analytics.heatmap_ref = f"/static/heatmaps/{warehouse_id}.png"      # served by static mount
     if (UPLOAD_DIR / f"{warehouse_id}.jpg").exists():
         analytics.image_ref = f"/uploads/{warehouse_id}.jpg"
+    analytics.shelf_count = len(wh.shelves)
+    analytics.floor_dims = wh.dimensions
 
     return analytics
 
@@ -140,8 +147,13 @@ def update_warehouse(warehouse_id: str, body: WarehouseUpdate,
     if body.length_m and body.width_m:
         record.dimensions = {"length": body.length_m, "width": body.width_m,
                              "height": body.height_m or 4.0}
+    if body.occupancy_pct is not None:
+        record.manual_occupancy = body.occupancy_pct
+
     db.commit()
-    return {"id": record.id, "name": record.name, "dimensions": record.dimensions}
+    return {"id": record.id, "name": record.name,
+        "dimensions": record.dimensions,
+        "manual_occupancy": record.manual_occupancy}
 
 
 @router.delete("/warehouse/{warehouse_id}")
