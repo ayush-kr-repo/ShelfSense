@@ -1,4 +1,4 @@
-const BASE = "http://localhost:8000";
+export const BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 // One function every screen uses to talk to the backend.
 // It auto-adds the API address and your login token.

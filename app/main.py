@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+import os
 
 from app.api import warehouse, optimize, auth
 
@@ -8,14 +9,16 @@ app = FastAPI(title="ShelfSense API")
 # Connecting FastAPI to React server
 from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI(title="ShelfSense API")
+origins = ["http://localhost:5173"]
+if os.getenv("FRONTEND_URL"):
+    origins.append(os.getenv("FRONTEND_URL"))
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],       # React dev server
+    allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],                            # GET, POST ..
-    allow_headers=["*"],                            # including Authoriztion
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 app.include_router(warehouse.router)

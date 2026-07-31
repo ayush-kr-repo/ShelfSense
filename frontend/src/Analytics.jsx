@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { api } from "./api";
+import { api, BASE } from "./api";
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer } from "recharts";
 import { motion, useSpring, useTransform } from "framer-motion";
 import Optimize from "./Optimize";
@@ -72,7 +72,7 @@ export default function Analytics({ id, onBack }) {
           {data.image_ref && (
             <div className="bg-slate-800 rounded-2xl p-6">
               <h2 className="text-xl font-semibold mb-3">Uploaded Photo</h2>
-              <img src={`http://localhost:8000${data.image_ref}?t=${Date.now()}`}
+              <img src={`${BASE}${data.heatmap_ref}?t=${Date.now()}`}
                    alt="Warehouse photo" className="rounded-lg max-w-full" />
             </div>
           )}
