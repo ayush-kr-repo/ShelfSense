@@ -267,9 +267,3 @@ Dockerfile               # Container definition for deployment
 ```
 
 ---
-
-<div align="center">
-
-**MIT License** · Built by [Ayush Kumar](https://github.com/ayush-kr-repo)
-
-</div>
