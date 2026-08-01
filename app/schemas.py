@@ -112,8 +112,6 @@ class Analytics(BaseModel):
     shelf_count: int = 0
     floor_dims: Dimensions | None = None
 
-
-
 class ShelfSpec(BaseModel):
     id: str
     w: float = Field(gt=0)

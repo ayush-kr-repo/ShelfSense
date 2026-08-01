@@ -6,7 +6,7 @@ from app.models import TaskRecord, UserRecord
 from app.auth import get_current_user
 from app.schemas import Warehouse, Analytics
 from app.phase1 import run_phase1
-from app.phase2 import run_phase2, apply_manual_occupancy
+from app.phase2 import run_phase2
 from app.worker import run_analysis
 from app.models import WarehouseRecord
 from app.heatmap import generate_heatmap
@@ -55,13 +55,8 @@ def get_analytics(warehouse_id: str,
                   user: UserRecord = Depends(get_current_user)):
     record = owned_warehouse(warehouse_id, db, user)
     dims = record.dimensions
-    manual = record.manual_occupancy
     wh = run_phase1(warehouse_id, image_for(warehouse_id), px_per_m, dims)
-    if manual is not None:
-        apply_manual_occupancy(wh, manual)
     analytics = run_phase2(wh)
-    if manual is not None:
-        analytics.occupancy_source = "manual"
 
     out = HEATMAP_DIR / f"{safe_id(warehouse_id)}.png"
     generate_heatmap(wh, str(out))      # Draw + save PNG

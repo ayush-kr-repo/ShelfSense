@@ -5,7 +5,7 @@ from ultralytics import YOLO
 from app.schemas import Warehouse, Shelf
 from app.schemas import Warehouse, Shelf, zone_class_for
 
-WEIGHTS = Path("ml/weights/best_s.pt")
+WEIGHTS = Path("ml/weights/best_clean.pt")
 _model = None                      # loaded once, lazily (it's ~6MB + torch startup)
 
 STANDARD_SHELF_FOOTPRINT_M2 = 1.2   # a typical shelf footprint (2.0 × 0.6 m)
@@ -16,12 +16,26 @@ def get_model() -> YOLO:
         _model = YOLO(str(WEIGHTS))
     return _model
 
+def coverage_ratio(shelf_xyxy, boxes, grid=40):
+    """Fraction of the shelf rectangle covered by at least one box.
+    Grid sampling means overlapping boxes are never double-counted."""
+    sx1, sy1, sx2, sy2 = shelf_xyxy
+    cell_w = max(sx2 - sx1, 1.0) / grid
+    cell_h = max(sy2 - sy1, 1.0) / grid
+    covered = 0
+    for i in range(grid):
+        cx = sx1 + (i + 0.5) * cell_w
+        for j in range(grid):
+            cy = sy1 + (j + 0.5) * cell_h
+            if any(b[0] <= cx <= b[2] and b[1] <= cy <= b[3] for b in boxes):
+                covered += 1
+    return covered / (grid * grid)
 
 def run_phase1(warehouse_id: str, image_path: str,
                px_per_m: float | None = None,
                dimensions: dict | None = None) -> Warehouse:
     """Phase 1, for real: image -> YOLO detections -> Warehouse JSON."""
-    results = get_model()(image_path)
+    results = get_model()(image_path, conf=0.15)
     r = results[0]
     img_h, img_w = r.orig_shape
 
@@ -45,8 +59,7 @@ def run_phase1(warehouse_id: str, image_path: str,
         inside = [b for b in boxes_px
                   if sx1 <= (b[0] + b[2]) / 2 <= sx2
                   and sy1 <= (b[1] + b[3]) / 2 <= sy2]
-        covered = sum((b[2] - b[0]) * (b[3] - b[1]) for b in inside)
-        occupancy = min(covered / s_area, 1.0)
+        occupancy = coverage_ratio(s, boxes_px)
 
         shelves.append(Shelf(
             id=f"S-{i}",
