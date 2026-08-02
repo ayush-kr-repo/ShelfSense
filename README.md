@@ -21,7 +21,7 @@
 
 ---
 
-> **ShelfSense turns a warehouse photograph into a decision.** Computer vision reads the shelves, an analytics engine scores storage health, a constraint solver computes the mathematically optimal layout, and an interactive 3D twin lets you explore the result — before a single real shelf is moved.
+> **Take a photo of your warehouse. Get back a health score, a heatmap of how full each shelf is, and a layout that fits more stock in the same floor space — shown in 3D.**
 
 ![ShelfSense 3D digital twin](docs/twin.png)
 
@@ -29,15 +29,15 @@
 
 ## What It Solves
 
-Warehouse space is expensive, and most storage decisions are made with a tape measure, a spreadsheet, and intuition. Managers rarely have a fast answer to the questions that matter most:
+Warehouse space is expensive, but most storage decisions get made with a tape measure and a gut feeling. ShelfSense answers five questions quickly:
 
-| Question | ShelfSense Answers With |
+| Question | How ShelfSense answers it |
 |---|---|
-| **How full is my warehouse?** | Storage Utilization Rate computed from detected shelf occupancy |
-| **How healthy is my storage?** | A weighted 0–100 health score across six dimensions |
-| **How many more shelves fit?** | A CP-SAT solver that packs your real floor under real constraints |
-| **What is the optimal layout?** | An optimized arrangement, rendered in interactive 3D |
-| **What should I fix first?** | Ranked, rule-based recommendations with impact levels |
+| **How full is my warehouse?** | Measures how much of each shelf is covered by stock |
+| **How healthy is my storage?** | Scores it 0–100 across six factors |
+| **How many more shelves fit?** | Solves for the best possible arrangement of your floor |
+| **What should that layout look like?** | Draws it in 3D you can rotate and zoom |
+| **What should I fix first?** | Lists specific problems, ranked by impact |
 
 ---
 
@@ -45,29 +45,29 @@ Warehouse space is expensive, and most storage decisions are made with a tape me
 
 ### Multi-Warehouse Management
 
-Upload a photo with real floor dimensions to create a warehouse. Rename, resize, and delete from the dashboard. Every warehouse is scoped to its owner and protected by JWT authentication.
+Upload a photo along with your real floor size to create a warehouse. Rename it, change its dimensions, or delete it from the dashboard. You only ever see your own warehouses — every request checks that you own what you're asking for.
 
 ![Dashboard](docs/dashboard.png)
 
 ### Warehouse Health Analytics
 
-A weighted health score built from six sub-scores — storage efficiency, accessibility, safety compliance, space balance, unused space index, and expansion readiness — visualized as a radar breakdown alongside actionable recommendations.
+One score out of 100, built from six separate measures: storage efficiency, accessibility, safety compliance, space balance, unused space, and room to expand. The radar chart shows which of the six is dragging the score down, and the recommendations below say what to do about it.
 
 ![Analytics](docs/Analytics.png)
 
 ### Occupancy Heatmap
 
-Every detected shelf bay is rendered and color-coded by how full it is, placed side by side with the source photograph so you can verify exactly what the model saw.
+Each shelf the model finds gets drawn as a rectangle, colored green (empty) through red (full). It sits next to the original photo so you can check the model against your own eyes.
 
 ![Occupancy heatmap](docs/Heatmap.png)
 
-### Capacity Planner and 3D Digital Twin
+### Capacity Planner and 3D Twin
 
-Enter your floor size, shelf footprint, and aisle width — the constraint solver packs the space and reports how many shelves fit, how much storage area that represents, and how much room remains to grow. Existing capacity renders green, growth potential renders amber, and the entire layout is explorable in 3D with orbit, pan, and zoom.
+Type in your floor size, shelf size, and how wide you need the aisles. The solver works out how many shelves fit and where they go. Shelves you already have show green, extra ones you could add show amber — so the gap between "what you have" and "what fits" is visible at a glance.
 
 ### Purpose-Built Training Dataset
 
-No public dataset contained warehouse shelf bays, so one was built: images assembled from multiple sources, with shelf bays hand-annotated under a documented convention — one label per rack bay, upright to upright, floor to top. The full standard is in [ml/ANNOTATION_GUIDE.md](ml/ANNOTATION_GUIDE.md).
+No public dataset had warehouse shelf bays labeled, so the dataset was built by hand. Every shelf label follows one rule — one box per rack bay, upright to upright, floor to top. The full standard is written down in [ml/ANNOTATION_GUIDE.md](ml/ANNOTATION_GUIDE.md).
 
 ![Dataset annotation](docs/annotated.png)
 
@@ -85,66 +85,94 @@ flowchart LR
     E --> F
 ```
 
-Every stage communicates through **one validated JSON contract** defined in Pydantic. Phase 1 produces it, Phase 2 consumes it, Phase 3 extends it, and the frontend renders it. That contract is why each layer can be replaced independently — upgrading the detection model is a one-line change.
+Every stage reads and writes **the same JSON structure**, defined once with Pydantic and checked automatically. Phase 1 creates it, Phase 2 scores it, Phase 3 adds the optimized layout, and the dashboard draws it. Because the format is fixed, any stage can be swapped out without touching the others — upgrading the detection model is a one-line change.
 
 ---
 
 ## How It Works
 
-### Phase 1 — Perception
+### Phase 1 — Reading the photo
 
-A fine-tuned YOLOv8 detector locates shelves, boxes, and pallets in a single photograph. Detections become structured metadata: shelf positions, per-bay occupancy, zone classification, and floor-plan areas.
+A YOLOv8 model, retrained on warehouse images, finds three things in a photo: **shelves** (rack bays), **boxes**, and **pallets**.
 
-Occupancy is measured by **grid sampling** the shelf rectangle and testing coverage against detected boxes, so overlapping detections are never double-counted — a summed-area approach saturates at 100% the moment box detection gets good.
+To work out how full a shelf is, the code lays an invisible grid over the shelf rectangle and checks each grid point: is it covered by a box or not? Occupancy is simply the fraction of points covered.
 
-Pixel measurements become real-world metres either from entered floor dimensions or from a single reference measurement passed as `?px_per_m=`. When no scale is available, the system reports relative units and declares it, rather than inventing numbers.
+The obvious alternative — adding up the area of every box — is wrong, and this project learned that the hard way. Boxes overlap and stack, so the total exceeds the shelf's own area and every shelf reads 100% full. Grid sampling counts each spot once, no matter how many boxes sit on it.
 
-### Phase 2 — Analytics
+To convert pixels into metres, ShelfSense uses either the floor size you typed in, or one known measurement passed as `?px_per_m=`. If it has neither, it says the numbers are relative instead of pretending they're metres.
 
-Storage Utilization Rate is computed volumetrically across all detected shelves. Six sub-scores are weighted into a single health score with a categorical band, and a rule engine produces recommendations from real square-metre analysis. When a required input is missing, the engine reports what it needs instead of guessing.
+### Phase 2 — Scoring the warehouse
 
-### Phase 3 — Optimization
+Storage Utilization Rate is how much of the total shelf volume actually holds stock. Six sub-scores are combined into one weighted health score with a label (Poor, Fair, Good, Excellent), and a set of rules turns the numbers into plain recommendations.
 
-Google OR-Tools CP-SAT solves the layout as a constraint satisfaction problem:
+When something can't be calculated — for example, no floor size was entered — the app says what it needs instead of inventing a number.
 
-- **No-overlap** in 2D across all placed shelves
-- **Aisle clearance** enforced through interval padding
-- **Exit keep-out zones** via reified boolean disjunction
-- **Optional 90° rotation** per shelf
-- **Optional placement**, so an over-constrained floor degrades gracefully instead of becoming infeasible
+### Phase 3 — Finding the best layout
 
-The objective maximizes the number of shelves placed — precisely the number a planner needs to know.
+Google OR-Tools CP-SAT treats the layout as a puzzle. You give it the floor size, shelf size, aisle width, and where the exit is. It must obey four rules:
+
+- Shelves can't overlap each other
+- Every shelf needs an aisle-width gap around it, so people can walk
+- No shelf may sit on the exit — each one has to be fully left, right, in front of, or behind it
+- A shelf can be turned 90° if that makes it fit
+
+The solver then finds the arrangement that fits **the most shelves**. If you ask for more shelves than the floor can hold, it places as many as it can rather than failing.
 
 ---
 
 ## Model Development
 
-Three training iterations were run, each testing a specific hypothesis about why detection underperformed.
+### How detection is measured
 
-| Iteration | Dataset | shelf | box | pallet |
+Detection quality is reported as **mAP@50**, the standard metric for object detection. Reading it left to right:
+
+- **IoU (Intersection over Union)** — when the model draws a box, IoU measures how much it overlaps the box a human drew. 1.0 is a perfect match, 0 is no overlap at all.
+- **@50** — a detection counts as correct if it overlaps the true box by at least 50%.
+- **Precision** — of all the boxes the model drew, how many were real?
+- **Recall** — of all the real objects present, how many did the model find?
+- **AP (Average Precision)** — one number combining precision and recall across every confidence setting.
+- **mAP** — AP averaged across all classes.
+
+**Why the 50% threshold suits this project:** ShelfSense doesn't need pixel-perfect edges. Occupancy is measured by grid coverage, and the layout planner only needs a count of bays. A box that's roughly in the right place is useful; a box that's 90% perfect isn't meaningfully better. The stricter **mAP@50-95** figure (averaged over overlap thresholds from 50% to 95%) is reported below too, since it shows how tight the boxes actually are.
+
+### Three experiments
+
+Each training run tested one specific idea about why detection was underperforming.
+
+| Run | Training data | shelf | box | pallet |
 |---|---|---|---|---|
-| v1 — merged public sources | 1,706 images | 0.39 | 0.34 | **0.96** |
-| v2 — same data, 3.5× larger model | 1,706 images | 0.41 | 0.38 | 0.96 |
-| v3 — curated, single annotation standard | 85 images | **0.44** | 0.10 | 0.19 |
+| **v1** — merged public datasets | 1,706 images | 0.39 | 0.34 | **0.96** |
+| **v2** — same data, 3.5× bigger model | 1,706 images | 0.41 | 0.38 | 0.96 |
+| **v3** — hand-curated, one labeling standard | 85 images | **0.44** | 0.10 | 0.19 |
 
-*mAP@50. Iterations use different validation splits, so figures are indicative rather than directly comparable.*
+*Figures are mAP@50. The runs use different validation sets, so treat them as indicative rather than an exact head-to-head.*
 
-**Model capacity is not the bottleneck.** Scaling from YOLOv8n to YOLOv8s moved overall mAP by 0.02 — a controlled result establishing that the limit is training data, not architecture.
+**A bigger model didn't help.** Going from YOLOv8n to YOLOv8s tripled the parameter count and moved overall accuracy by 0.02. That ruled out model size as the problem and pointed at the data.
 
-**Label consistency dominates label volume.** A retrain with expanded annotations *reduced* box accuracy sharply, because newly annotated images used a different granularity convention than the validation set. That result drove the dataset rebuild around a single documented standard, and a curated 85-image set then outperformed 1,706 mixed-convention images on the target class.
+**Consistent labels beat more labels.** An early retrain with *more* annotations made box accuracy worse, because the new images labeled boxes at a different granularity than the older ones — the model was taught one rule and graded against another. Rebuilding the dataset around a single written standard fixed the contradiction, and 85 carefully labeled images then matched 1,706 mixed-source ones on shelf detection.
 
-**Focused models beat generalists at small scale.** An isolated single-class run reached 0.77 on shelf detection — nearly double the same dataset's three-class result — because model capacity was not split across classes with wildly different instance counts.
+**One job beats three.** A run that trained on shelves alone reached **0.77** — nearly double the same dataset's three-class shelf score. With only 85 images, splitting the model's capacity across three classes costs more than it gains.
 
-The v3 weights are in production: bay detection drives the heatmap and the storage-utilization denominator, and it improved from roughly one bay per photograph to four or five correctly placed ones.
+### Current production model
 
-**Known limitations**, stated deliberately:
+The v3 weights are the ones running. Full numbers on the held-out validation set:
 
-- Occupancy is estimated from a single 2D viewpoint; stock depth behind the visible front row cannot be observed
-- Box recall inside detected bays remains the weakest link, and understates occupancy on densely packed racking
-- Shelf detection is reliable on straight-on rack imagery and degrades on oblique or low-light scenes
-- Safety compliance returns a neutral placeholder pending aisle-width and load-weight inputs
+| Class | Precision | Recall | mAP@50 | mAP@50-95 |
+|---|---|---|---|---|
+| shelf | 0.46 | 0.51 | 0.44 | 0.24 |
+| box | 0.32 | 0.15 | 0.10 | 0.05 |
+| pallet | 0.33 | 0.26 | 0.19 | 0.09 |
 
-Detection is upgradeable by replacing a single weights file — no application changes required.
+**What these numbers mean in practice.** Shelf detection went from roughly one bay per photo to four or five correctly placed ones, which is why heatmaps now look like actual racking. Box **recall of 0.15** is the weak spot — the model finds about one box in seven, so occupancy reads low on densely packed shelves. That single number explains most of the remaining error in the product, and it's a data problem: more labeled boxes, not more code.
+
+### Known limitations
+
+- A single photo only shows the front row. Stock sitting deeper on a shelf can't be seen, so occupancy is always an estimate.
+- Low box recall understates how full busy shelves are.
+- Shelf detection works well on straight-on rack photos and gets worse at steep angles or in poor light.
+- Safety compliance returns a fixed placeholder score, because aisle widths and load weights aren't measured yet.
+
+Swapping in a better model is a one-line change — no other code has to move.
 
 ---
 
@@ -186,7 +214,7 @@ uv run alembic upgrade head
 uv run uvicorn app.main:app --reload
 ```
 
-**Start the worker** — separate terminal, optional, for asynchronous analysis
+**Start the worker** — separate terminal, only needed for background analysis
 
 ```bash
 uv run celery -A app.worker.celery_app worker --loglevel=info --pool=solo
@@ -217,22 +245,22 @@ uv run pytest
 
 ![API endpoints](docs/endpoints.png)
 
-| Endpoint | Purpose |
+| Endpoint | What it does |
 |:---|:---|
 | `POST /api/v1/auth/register` | Create an account |
-| `POST /api/v1/auth/login` | Authenticate and receive a JWT |
-| `GET /api/v1/warehouses` | List the authenticated user's warehouses |
-| `POST /api/v1/warehouse/{id}/upload` | Upload a photo with optional floor dimensions |
-| `GET /api/v1/warehouse/{id}` | Phase 1 detection output |
-| `GET /api/v1/analytics/{id}` | Health analytics, heatmap, and capacity data |
-| `PATCH /api/v1/warehouse/{id}/meta` | Update name or floor dimensions |
-| `DELETE /api/v1/warehouse/{id}` | Delete a warehouse and its media |
-| `POST /api/v1/optimize` | Run CP-SAT layout optimization |
-| `GET /api/v1/layout/{id}` | Retrieve a stored optimized layout |
-| `POST /api/v1/analyze` | Queue asynchronous analysis, returns a task id |
-| `GET /api/v1/task/{id}` | Poll task status and progress |
+| `POST /api/v1/auth/login` | Log in and get a token |
+| `GET /api/v1/warehouses` | List your warehouses |
+| `POST /api/v1/warehouse/{id}/upload` | Upload a photo and floor size |
+| `GET /api/v1/warehouse/{id}` | Raw detection results for one warehouse |
+| `GET /api/v1/analytics/{id}` | Health score, heatmap, and capacity figures |
+| `PATCH /api/v1/warehouse/{id}/meta` | Rename or change floor size |
+| `DELETE /api/v1/warehouse/{id}` | Delete a warehouse and its files |
+| `POST /api/v1/optimize` | Work out the best shelf layout |
+| `GET /api/v1/layout/{id}` | Fetch a saved layout |
+| `POST /api/v1/analyze` | Start a background analysis, returns a task id |
+| `GET /api/v1/task/{id}` | Check how that task is going |
 
-All warehouse endpoints require JWT authentication and enforce per-user ownership.
+Every warehouse endpoint requires a login token and checks that the warehouse belongs to you.
 
 ---
 
@@ -240,30 +268,30 @@ All warehouse endpoints require JWT authentication and enforce per-user ownershi
 
 ```text
 app/
-├── main.py              # FastAPI application assembly
-├── api/                 # Route modules: warehouse · optimize · auth
-├── schemas.py           # The shared JSON contract (Pydantic)
-├── models.py            # SQLAlchemy ORM models
-├── database.py          # Engine and session management
-├── auth.py              # JWT issuance, verification, password hashing
-├── scale.py             # Pixel-to-metre conversion
-├── heatmap.py           # Occupancy heatmap rendering
-├── worker.py            # Celery task definitions
-└── phase1.py … phase3.py    # Perception · Analytics · Optimization
+├── main.py              # Builds the FastAPI app
+├── api/                 # Routes: warehouse · optimize · auth
+├── schemas.py           # The shared JSON structure (Pydantic)
+├── models.py            # Database tables (SQLAlchemy)
+├── database.py          # Database connection and sessions
+├── auth.py              # Login tokens and password hashing
+├── scale.py             # Pixels to metres
+├── heatmap.py           # Draws the occupancy heatmap
+├── worker.py            # Background tasks (Celery)
+└── phase1.py … phase3.py    # Detection · Scoring · Layout solving
 
 frontend/src/
-├── api.js               # Fetch wrapper: base URL, JWT injection, 401 handling
-├── Login.jsx            # Authentication
-├── Dashboard.jsx        # Warehouse grid and management
-├── Upload.jsx           # Multipart photo upload with dimensions
-├── Analytics.jsx        # Health score, radar, recommendations, media
-├── Optimize.jsx         # Capacity planner and solver interface
-└── Twin.jsx             # react-three-fiber 3D digital twin
+├── api.js               # Talks to the backend, attaches the login token
+├── Login.jsx            # Login screen
+├── Dashboard.jsx        # Warehouse cards and management
+├── Upload.jsx           # Photo upload with floor size
+├── Analytics.jsx        # Score, charts, recommendations, images
+├── Optimize.jsx         # Capacity planner
+└── Twin.jsx             # 3D view
 
 alembic/                 # Database migrations
 ml/                      # Model weights, training notebook, annotation guide
-tests/                   # Pytest suite
-Dockerfile               # Container definition for deployment
+tests/                   # Test suite
+Dockerfile               # For deployment
 ```
 
 ---
