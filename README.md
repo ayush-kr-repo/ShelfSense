@@ -157,11 +157,11 @@ Each training run tested one specific idea about why detection was underperformi
 
 The v3 weights are the ones running. Full numbers on the held-out validation set:
 
-| Class | Precision | Recall | mAP@50 | mAP@50-95 |
-|---|---|---|---|---|
-| shelf | 0.46 | 0.51 | 0.44 | 0.24 |
-| box | 0.32 | 0.15 | 0.10 | 0.05 |
-| pallet | 0.33 | 0.26 | 0.19 | 0.09 |
+| Class | Precision | Recall | mAP@50 |
+|---|---|---|---|
+| shelf | 0.46 | 0.51 | 0.44 |
+| box | 0.32 | 0.15 | 0.10 |
+| pallet | 0.33 | 0.26 | 0.19 |
 
 **What these numbers mean in practice.** Shelf detection went from roughly one bay per photo to four or five correctly placed ones, which is why heatmaps now look like actual racking. Box **recall of 0.15** is the weak spot — the model finds about one box in seven, so occupancy reads low on densely packed shelves. That single number explains most of the remaining error in the product, and it's a data problem: more labeled boxes, not more code.
 
