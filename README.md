@@ -65,6 +65,8 @@ Each shelf the model finds gets drawn as a rectangle, colored green (empty) thro
 
 Type in your floor size, shelf size, and how wide you need the aisles. The solver works out how many shelves fit and where they go. Shelves you already have show green, extra ones you could add show amber — so the gap between "what you have" and "what fits" is visible at a glance.
 
+![Capacity planner](docs/planner.png)
+
 ### Purpose-Built Training Dataset
 
 No public dataset had warehouse shelf bays labeled, so the dataset was built by hand. Every shelf label follows one rule — one box per rack bay, upright to upright, floor to top. The full standard is written down in [ml/ANNOTATION_GUIDE.md](ml/ANNOTATION_GUIDE.md).
@@ -133,7 +135,7 @@ Detection quality is reported as **mAP@50**, the standard metric for object dete
 - **AP (Average Precision)** — one number combining precision and recall across every confidence setting.
 - **mAP** — AP averaged across all classes.
 
-**Why the 50% threshold suits this project:** ShelfSense doesn't need pixel-perfect edges. Occupancy is measured by grid coverage, and the layout planner only needs a count of bays. A box that's roughly in the right place is useful; a box that's 90% perfect isn't meaningfully better. The stricter **mAP@50-95** figure (averaged over overlap thresholds from 50% to 95%) is reported below too, since it shows how tight the boxes actually are.
+**Why the 50% threshold suits this project:** ShelfSense doesn't need pixel-perfect edges. Occupancy is measured by grid coverage, and the layout planner only needs a count of bays. A box that's roughly in the right place is useful; a box that's 90% perfect isn't meaningfully better.
 
 ### Three experiments
 
