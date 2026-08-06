@@ -23,8 +23,6 @@
 
 > **Take a photo of your warehouse. Get back a health score, a heatmap of how full each shelf is, and a layout that fits more stock in the same floor space — shown in 3D.**
 
-![ShelfSense 3D digital twin](docs/twin.png)
-
 ---
 
 ## What It Solves
