@@ -103,7 +103,9 @@ To convert pixels into metres, ShelfSense uses either the floor size you typed i
 
 ### Phase 2 — Scoring the warehouse
 
-Storage Utilization Rate is how much of the total shelf volume actually holds stock. Six sub-scores are combined into one weighted health score with a label (Poor, Fair, Good, Excellent), and a set of rules turns the numbers into plain recommendations.
+Storage Utilization Rate is how much of the total shelf volume actually holds stock. Six sub-scores are combined into one weighted health score with a label (Poor, Fair, Good, Excellent).
+
+Recommendations come from independent rules, each of which either fires or stays quiet. Every one cites the evidence that triggered it — naming specific bays and their occupancy — and estimates the health-score points it would recover, so the list is ranked by what's actually worth doing first. One rule detects stock stacked on the floor rather than on racking, which blocks aisles and means existing capacity is going unused.
 
 When something can't be calculated — for example, no floor size was entered — the app says what it needs instead of inventing a number.
 
