@@ -72,6 +72,7 @@ Polygon = list[list[float]]
 class FloorPlan(BaseModel):
     total_area: float
     used_area: float
+    unshelved_boxes: int = 0        # boxes detected on the floor, not on any bay
     aisle_regions: list[Polygon] = []
     empty_regions: list[Polygon] = []
 

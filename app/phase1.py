@@ -2,7 +2,6 @@ from pathlib import Path
 
 from ultralytics import YOLO
 
-from app.schemas import Warehouse, Shelf
 from app.schemas import Warehouse, Shelf, zone_class_for
 
 WEIGHTS = Path("ml/weights/best_clean.pt")
@@ -49,11 +48,17 @@ def run_phase1(warehouse_id: str, image_path: str,
         elif name == "box":
             boxes_px.append(xyxy)
 
+    # boxes whose centre isn't inside any detected bay = stock sitting on the floor
+    def _on_a_shelf(b):
+        cx, cy = (b[0] + b[2]) / 2, (b[1] + b[3]) / 2
+        return any(s[0] <= cx <= s[2] and s[1] <= cy <= s[3] for s, _ in shelves_px)
+
+    unshelved = sum(1 for b in boxes_px if not _on_a_shelf(b))
+
     f = px_per_m if px_per_m else 100.0
     shelves = []
     for i, (s, conf) in enumerate(shelves_px):
         sx1, sy1, sx2, sy2 = s
-        s_area = max((sx2 - sx1) * (sy2 - sy1), 1.0)
 
         # boxes whose CENTER falls inside this shelf = "on" it
         inside = [b for b in boxes_px
@@ -95,7 +100,8 @@ def run_phase1(warehouse_id: str, image_path: str,
         ),
         dimensions=dims_obj,                                  
         shelves=shelves,
-        floor_plan={"total_area": total_area, "used_area": used_area},
+        floor_plan={"total_area": total_area, "used_area": used_area,
+                    "unshelved_boxes": unshelved},
         metadata={"model_versions": {"yolo": "v8n-shelfsense-v2"},
                   "confidence_summary": 0.5},
     )

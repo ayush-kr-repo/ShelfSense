@@ -1,9 +1,11 @@
-from app.schemas import Warehouse, Shelf, Analytics, zone_class_for 
+from app.schemas import Warehouse, Shelf, Analytics
+
 
 def shelf_volume(shelf: Shelf) -> float:
     """Volume a shelf could hold in cubic metres = w x h x d"""
     dims = shelf.estimated_dims
     return dims.w * dims.h * dims.d
+
 
 def compute_sur(warehouse: Warehouse) -> float:
     """Storage Utilization Rate as a percentage"""
@@ -12,36 +14,12 @@ def compute_sur(warehouse: Warehouse) -> float:
 
     if usable_vol == 0:
         return 0.0
-    
-    return round(occupied_vol/usable_vol * 100, 1)
 
-def apply_manual_occupancy(wh: Warehouse, pct: float) -> None:
-    """Replace CV occupancy guesses with the manager's own estimate.
+    return round(occupied_vol / usable_vol * 100, 1)
 
-    Mutates wh in place so everything downstream (SUR, health, heatmap)
-    sees the corrected numbers.
-    """
-    frac = pct / 100
-    if wh.shelves:
-        for s in wh.shelves:
-            s.occupancy_pct = frac
-            s.zone_class = zone_class_for(frac)
-            s.box_count = round(frac * s.capacity_estimate)
-    else:
-        wh.shelves = [Shelf(
-            id="WH-ESTIMATE",
-            pixel_position={"x": 0, "y": 0},
-            position={"x": 0.0, "y": 0.0, "z": 0.0},
-            estimated_dims={"w": 1.0, "h": 1.0, "d": 1.0},
-            occupancy_pct=frac,
-            box_count=round(frac * 10),
-            capacity_estimate=10,
-            zone_class=zone_class_for(frac),
-            confidence=1.0,
-        )]
 
 HEALTH_WEIGHTS = {
-    "storage_efficiency" : 0.30,
+    "storage_efficiency": 0.30,
     "accessibility": 0.20,
     "safety_compliance": 0.20,
     "space_balance": 0.15,
@@ -49,15 +27,17 @@ HEALTH_WEIGHTS = {
     "expansion_readiness": 0.05,
 }
 
+
 def health_band(score: float) -> str:
     """Map a 0-100 score to a label"""
     if score >= 90:
         return "Excellent"
     if score >= 75:
         return "Good"
-    if score >=55:
+    if score >= 55:
         return "Fair"
     return "Poor"
+
 
 def compute_health_score(subscores: dict) -> dict:
     """Weighted sum of six 0-100 subscores -> final score + band"""
@@ -65,16 +45,19 @@ def compute_health_score(subscores: dict) -> dict:
     total = round(total, 1)
     return {"score": total, "band": health_band(total)}
 
+
 def score_storage_efficiency(wh: Warehouse) -> float:
     """How well volume is used -> just the SUR"""
     return min(compute_sur(wh), 100.0)
+
 
 def score_space_balance(wh: Warehouse) -> float:
     occ = [s.occupancy_pct for s in wh.shelves]
     if not occ:
         return 0.0
-    spread = max(occ) - min(occ)        # 0 = perfectly even, 1 = wildly even
-    return round((1-spread) * 100,1)
+    spread = max(occ) - min(occ)        # 0 = perfectly even, 1 = wildly uneven
+    return round((1 - spread) * 100, 1)
+
 
 def score_unused_space_index(wh: Warehouse) -> float:
     """Fraction of shelves that are actually being used (not empty/low)."""
@@ -106,9 +89,9 @@ def score_expansion_readiness(wh: Warehouse) -> float:
 
 def score_safety_compliance(wh: Warehouse) -> float:
     """Page 9 wants aisle-width (<80cm) and heavy-SKU-on-top checks.
-    Our app.phase 1 stub doesn't provide aisle widths or SKU weights yet,
-    so we return a neutral placeholder rather than fake a precise number.
-    TODO: compute for real once app.phase 1 supplies aisle + weight data.
+    Phase 1 doesn't supply aisle widths or SKU weights yet, so we return a
+    neutral placeholder rather than fake a precise number.
+    TODO: compute for real once phase 1 supplies aisle + weight data.
     """
     return 60.0
 
@@ -127,41 +110,118 @@ def evaluate_health(wh: Warehouse) -> dict:
     result["subscores"] = subscores     # keep the breakdown for the dashboard
     return result
 
-LOW_FILL_THRESHOLD = 0.25       # "<25% full"
-LARGE_EMPTY_AREA_M2 = 50.0      # free floor beyond this = "large empty region"
+
+# ---------------------------------------------------------------
+# Recommendation rules
+# Each rule takes a Warehouse and returns a dict or None.
+# "points" is the estimated health-score gain — used only for ranking.
+# ---------------------------------------------------------------
+
+LOW_FILL_THRESHOLD = 0.25          # a bay under this counts as nearly empty
+LARGE_EMPTY_AREA_M2 = 50.0         # free floor beyond this is worth racking
+EFFECTIVE_AREA_PER_SHELF_M2 = 2.4  # 1.2 m² footprint plus an aisle allowance
+FLOOR_STACK_THRESHOLD = 3          # fewer floor boxes than this isn't worth flagging
+
+
+def _impact_label(points: float) -> str:
+    if points >= 10:
+        return "High"
+    if points >= 4:
+        return "Medium"
+    return "Low"
+
+
+def rule_no_detections(wh: Warehouse):
+    if wh.shelves:
+        return None
+    return {
+        "condition": "No shelving was detected in this photo",
+        "recommendation": ("Upload a straight-on photo with the rack uprights visible. "
+                           "Detection is unreliable at steep angles or in low light."),
+        "points": 15.0,
+    }
+
+
+def rule_floor_stacking(wh: Warehouse):
+    count = wh.floor_plan.unshelved_boxes
+    if count < FLOOR_STACK_THRESHOLD:
+        return None
+    emptiest = min(wh.shelves, key=lambda s: s.occupancy_pct, default=None)
+    if emptiest is not None and emptiest.occupancy_pct < 0.6:
+        where = (f" {emptiest.id} is only {emptiest.occupancy_pct:.0%} full "
+                 f"and could take them.")
+    else:
+        where = " Existing racking is near capacity, so this likely needs more shelving."
+    return {
+        "condition": f"{count} boxes are stacked on the floor rather than on racking",
+        "recommendation": ("Floor-stacked stock blocks aisles, is slower to pick, and "
+                           "is a safety risk." + where),
+        "points": min(6.0 + 0.5 * count, 14.0),
+    }
+
+
+def rule_underused_bays(wh: Warehouse):
+    low = [s for s in wh.shelves if s.occupancy_pct < LOW_FILL_THRESHOLD]
+    if len(low) < 2:
+        return None
+    detail = ", ".join(f"{s.id} at {s.occupancy_pct:.0%}" for s in low)
+    freed = len(low) - 1
+    return {
+        "condition": f"{len(low)} bays are under 25% full — {detail}",
+        "recommendation": (f"Consolidate this stock onto one bay. That frees {freed} "
+                           f"bay{'s' if freed != 1 else ''} for incoming inventory "
+                           f"without adding any racking."),
+        "points": 3.0 + 2.5 * len(low),
+    }
+
+
+def rule_free_floor(wh: Warehouse):
+    if wh.dimensions is None:
+        return None
+    free_area = wh.floor_plan.total_area - wh.floor_plan.used_area
+    if free_area < LARGE_EMPTY_AREA_M2:
+        return None
+    extra = int(free_area / EFFECTIVE_AREA_PER_SHELF_M2)
+    return {
+        "condition": f"About {free_area:.0f} m² of floor is unracked",
+        "recommendation": (f"That space fits roughly {extra} more shelves including aisles. "
+                           f"Use the Capacity Planner below to see the layout."),
+        "points": 12.0,
+    }
+
+
+def rule_missing_dimensions(wh: Warehouse):
+    if wh.dimensions is not None:
+        return None
+    return {
+        "condition": "Floor dimensions have not been set",
+        "recommendation": ("Add this warehouse's floor size from its dashboard card "
+                           "to unlock space and capacity analysis."),
+        "points": 1.0,
+    }
+
+
+RULES = [
+    rule_no_detections,
+    rule_floor_stacking,
+    rule_underused_bays,
+    rule_free_floor,
+    rule_missing_dimensions,
+]
+
 
 def generate_recommendations(wh: Warehouse) -> list[dict]:
-    """Scan the warehouse and return a list of actionable recommendations"""
-    recs = []
+    """Run every rule, keep the ones that fired, rank by estimated impact."""
+    fired = [result for rule in RULES if (result := rule(wh)) is not None]
+    fired.sort(key=lambda r: r["points"], reverse=True)
+    return [{"condition": r["condition"],
+             "recommendation": r["recommendation"],
+             "impact": _impact_label(r["points"])}
+            for r in fired]
 
-    low_fill = [s for s in wh.shelves if s.occupancy_pct < LOW_FILL_THRESHOLD]
-    if len(low_fill) >= 2:
-        ids = ", ".join(s.id for s in low_fill)
-        recs.append({
-            "condition": f"{len(low_fill)} shelves under 25% full ({ids})",
-            "recommendation": "Consolidate stock onto fewer shelves; repurpose the freed slots",
-            "impact": "Medium",
-        })
-
-    if wh.dimensions is not None:
-        free_area = wh.floor_plan.total_area - wh.floor_plan.used_area
-        if free_area >= LARGE_EMPTY_AREA_M2:
-            recs.append({
-                "condition": f"Large empty floor region (~{free_area:.0f} m2 unused)",
-                "recommendation": "Add vertical racks to convert floor space into storage capacity.",
-                "impact": "High",
-            })
-    else:
-        recs.append({
-            "condition": "Floor dimensions not set - space analysis unavailable",
-            "recommendation": "Set this warehouse's floor size (the pencil icon on its card) to unlock space recommendations.",
-            "impact": "Low",
-        })
-
-    return recs
 
 def run_phase2(wh: Warehouse) -> Analytics:
-    """Full app.phase 2: Take a Warehouse, return its Analytics."""
+    """Full phase 2: take a Warehouse, return its Analytics."""
     return Analytics(
         warehouse_id=wh.warehouse_id,
         sur=compute_sur(wh),
