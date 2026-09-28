@@ -7,15 +7,15 @@ from app.auth import get_current_user
 from app.schemas import Warehouse, Analytics
 from app.phase1 import run_phase1
 from app.phase2 import run_phase2
-from app.worker import run_analysis
 from app.models import WarehouseRecord
 from app.heatmap import generate_heatmap
 from app.schemas import WarehouseUpdate
 
 import re
-import shutil
 from pathlib import Path
 from fastapi import UploadFile, File, Form
+
+MAX_UPLOAD_BYTES = 8 * 1024 * 1024
 
 router = APIRouter(prefix="/api/v1", tags=["warehouse"])
 
@@ -43,10 +43,10 @@ def image_for(warehouse_id: str) -> str:
 @router.get("/warehouse/{warehouse_id}", response_model=Warehouse)
 def get_warehouse(warehouse_id: str,
                   px_per_m: float | None = None,
+                  db: Session = Depends(get_db),
                   user: UserRecord = Depends(get_current_user)):
-    owned_warehouse(warehouse_id, db, user)
-    return run_phase1(warehouse_id, image_for(warehouse_id), px_per_m)
-
+    record = owned_warehouse(warehouse_id, db, user)
+    return run_phase1(warehouse_id, image_for(warehouse_id), px_per_m, record.dimensions)
 
 @router.get("/analytics/{warehouse_id}", response_model=Analytics)
 def get_analytics(warehouse_id: str,
@@ -69,11 +69,20 @@ def get_analytics(warehouse_id: str,
     return analytics
 
 @router.post("/analyze")
-def analyze(warehouse_id: str = "wh_demo", db: Session = Depends(get_db)):
-    task = TaskRecord(warehouse_id=warehouse_id, type="analyze")
+def analyze(warehouse_id: str = "wh_demo",
+            db: Session = Depends(get_db),
+            user: UserRecord = Depends(get_current_user)):
+    record = owned_warehouse(warehouse_id, db, user)
+    task = TaskRecord(warehouse_id=warehouse_id, type="analyze", status="running")
     db.add(task); db.commit(); db.refresh(task)
-    run_analysis.delay(task.id, warehouse_id)
-    return {"task_id": task.id}
+    try:
+        wh = run_phase1(warehouse_id, image_for(warehouse_id), None, record.dimensions)
+        run_phase2(wh)
+        task.status, task.progress = "done", 100
+    except Exception as e:
+        task.status, task.error = "failed", str(e)
+    db.commit()
+    return {"task_id": task.id, "status": task.status}
 
 
 @router.get("/task/{task_id}")
@@ -95,8 +104,17 @@ def upload_image(warehouse_id: str,
     if not (file.content_type or "").startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image")
     dest = UPLOAD_DIR / f"{safe_id(warehouse_id)}.jpg"
-    with open(dest, "wb") as out:
-        shutil.copyfileobj(file.file, out)      # stream bytes → disk
+    size = 0
+    try:
+        with open(dest, "wb") as out:
+            while chunk := file.file.read(1024 * 1024):
+                size += len(chunk)
+                if size > MAX_UPLOAD_BYTES:
+                    raise HTTPException(status_code=413, detail="Image too large (max 8 MB)")
+                out.write(chunk)
+    except HTTPException:
+        dest.unlink(missing_ok=True)
+        raise
 
     dims = None
     if length_m and width_m:

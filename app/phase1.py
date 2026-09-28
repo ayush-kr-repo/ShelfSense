@@ -15,20 +15,51 @@ def get_model() -> YOLO:
         _model = YOLO(str(WEIGHTS))
     return _model
 
-def coverage_ratio(shelf_xyxy, boxes, grid=40):
+def coverage_ratio(shelf_xyxy, boxes):
     """Fraction of the shelf rectangle covered by at least one box.
-    Grid sampling means overlapping boxes are never double-counted."""
+
+    Exact: the union area is computed by coordinate compression, so
+    overlapping boxes are never double-counted and there is no
+    sampling error.
+    """
     sx1, sy1, sx2, sy2 = shelf_xyxy
-    cell_w = max(sx2 - sx1, 1.0) / grid
-    cell_h = max(sy2 - sy1, 1.0) / grid
-    covered = 0
-    for i in range(grid):
-        cx = sx1 + (i + 0.5) * cell_w
-        for j in range(grid):
-            cy = sy1 + (j + 0.5) * cell_h
-            if any(b[0] <= cx <= b[2] and b[1] <= cy <= b[3] for b in boxes):
-                covered += 1
-    return covered / (grid * grid)
+    area = (sx2 - sx1) * (sy2 - sy1)
+    if area <= 0:                                   # degenerate detection
+        return 0.0
+
+    # clip every box to the shelf; drop the ones that miss it entirely
+    clipped = []
+    for b in boxes:
+        x1, y1 = max(b[0], sx1), max(b[1], sy1)
+        x2, y2 = min(b[2], sx2), min(b[3], sy2)
+        if x2 > x1 and y2 > y1:
+            clipped.append((x1, y1, x2, y2))
+
+    if not clipped:
+        return 0.0
+
+    # cut lines: coverage can only change at a box edge
+    xs = sorted({v for r in clipped for v in (r[0], r[2])})
+    ys = sorted({v for r in clipped for v in (r[1], r[3])})
+    xi = {v: i for i, v in enumerate(xs)}
+    yi = {v: i for i, v in enumerate(ys)}
+
+    # every cell of this irregular grid is wholly covered or wholly empty
+    covered = [[False] * (len(ys) - 1) for _ in range(len(xs) - 1)]
+    for x1, y1, x2, y2 in clipped:
+        for a in range(xi[x1], xi[x2]):
+            row = covered[a]
+            for b in range(yi[y1], yi[y2]):
+                row[b] = True
+
+    total = 0.0
+    for a in range(len(xs) - 1):
+        width = xs[a + 1] - xs[a]
+        for b in range(len(ys) - 1):
+            if covered[a][b]:
+                total += width * (ys[b + 1] - ys[b])
+
+    return total / area
 
 def run_phase1(warehouse_id: str, image_path: str,
                px_per_m: float | None = None,

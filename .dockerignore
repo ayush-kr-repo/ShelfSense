@@ -1,0 +1,12 @@
+.venv
+.git
+__pycache__
+*.pyc
+runs/
+uploads/
+static/heatmaps/
+shelfsense.db
+frontend/node_modules
+frontend/
+.pytest_cache
+ml/training/

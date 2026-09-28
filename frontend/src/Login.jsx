@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { BASE } from "./api";
 
 export default function Login({ onLogin }) {
   const [email, setEmail] = useState("");
@@ -11,7 +12,7 @@ export default function Login({ onLogin }) {
     try {
       // /login uses OAuth2 form data (username/password), NOT JSON:
       const body = new URLSearchParams({ username: email, password });
-      const res = await fetch("http://localhost:8000/api/v1/auth/login", {
+      const res = await fetch(`${BASE}/api/v1/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body,
