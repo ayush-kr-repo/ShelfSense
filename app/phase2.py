@@ -1,3 +1,5 @@
+import statistics
+
 from app.schemas import Warehouse, Shelf, Analytics
 
 
@@ -40,10 +42,23 @@ def health_band(score: float) -> str:
 
 
 def compute_health_score(subscores: dict) -> dict:
-    """Weighted sum of six 0-100 subscores -> final score + band"""
-    total = sum(subscores[name] * weight for name, weight in HEALTH_WEIGHTS.items())
-    total = round(total, 1)
-    return {"score": total, "band": health_band(total)}
+    """Weighted mean of the 0-100 sub-scores that could actually be measured.
+
+    A sub-score of None means "not measurable from this input". Its weight is
+    redistributed over the rest instead of being filled with a constant, so the
+    result always spans a real 0-100. The old version substituted a fixed 60.0
+    for safety_compliance, which pinned 12 points into every score ever
+    produced and made the true range 12-92.
+    """
+    available = {k: v for k, v in subscores.items() if v is not None}
+    weight_sum = sum(HEALTH_WEIGHTS[k] for k in available)
+    if weight_sum == 0:
+        return {"score": 0.0, "band": health_band(0.0),
+                "unavailable": sorted(subscores)}
+    total = round(
+        sum(available[k] * HEALTH_WEIGHTS[k] for k in available) / weight_sum, 1)
+    return {"score": total, "band": health_band(total),
+            "unavailable": sorted(k for k, v in subscores.items() if v is None)}
 
 
 def score_storage_efficiency(wh: Warehouse) -> float:
@@ -52,48 +67,116 @@ def score_storage_efficiency(wh: Warehouse) -> float:
 
 
 def score_space_balance(wh: Warehouse) -> float:
+    """How evenly stock is spread across bays, over the WHOLE distribution.
+
+    Uses the coefficient of variation (spread relative to the mean). The old
+    version was max(occ) - min(occ), so with 100 bays a single empty one
+    pinned the score near zero and the other 99 were ignored entirely.
+    """
     occ = [s.occupancy_pct for s in wh.shelves]
     if not occ:
         return 0.0
-    spread = max(occ) - min(occ)        # 0 = perfectly even, 1 = wildly uneven
-    return round((1 - spread) * 100, 1)
+    mean = sum(occ) / len(occ)
+    if mean == 0:
+        return 100.0                    # nothing stored anywhere is trivially even
+    cv = statistics.pstdev(occ) / mean
+    return round(max(0.0, 1 - cv) * 100, 1)
+
+
+TARGET_FILL = 0.80              # a bay at or above this is fully productive
 
 
 def score_unused_space_index(wh: Warehouse) -> float:
-    """Fraction of shelves that are actually being used (not empty/low)."""
+    """How close each bay is to a healthy fill level, averaged over all bays.
+
+    Continuous: a bay at 40% contributes 50, not 0. The old version bucketed on
+    zone_class, so 49% full counted as wasted and 51% as fully productive -- a
+    17-point jump in the total health score from one box crossing a threshold.
+    """
     if not wh.shelves:
         return 0.0
-    wasted = sum(1 for s in wh.shelves if s.zone_class in ("empty", "low"))
-    filled_fraction = 1 - wasted / len(wh.shelves)
-    return round(filled_fraction * 100, 1)
+    productive = sum(min(s.occupancy_pct / TARGET_FILL, 1.0) for s in wh.shelves)
+    return round(productive / len(wh.shelves) * 100, 1)
 
 
-def score_accessibility(wh: Warehouse) -> float:
-    """Proxy: free floor space = room to move around."""
-    fp = wh.floor_plan
-    if fp.total_area == 0:
-        return 0.0
-    free_ratio = (fp.total_area - fp.used_area) / fp.total_area
-    return round(free_ratio * 100, 1)
+MIN_AISLE_M = 0.9               # a working aisle between two bays
+
+
+def _gap_m(a: Shelf, b: Shelf) -> float:
+    """Clear distance between two bays in the observed plane, in metres.
+
+    Positions come from a single photo, so x runs across the image and z down
+    it; a bay occupies [x, x+w] by [z, z+h]. Two rectangles overlapping on
+    both axes have a gap of zero.
+    """
+    dx = max(a.position.x - (b.position.x + b.estimated_dims.w),
+             b.position.x - (a.position.x + a.estimated_dims.w), 0.0)
+    dz = max(a.position.z - (b.position.z + b.estimated_dims.h),
+             b.position.z - (a.position.z + a.estimated_dims.h), 0.0)
+    return max(dx, dz)
+
+
+def aisle_adequacy(shelves: list[Shelf]) -> float:
+    """Mean nearest-neighbour gap between bays, scored against MIN_AISLE_M.
+
+    Ready for use once a data source can tell bays apart from rack runs --
+    fiducial-derived poses or multi-view capture. Not wired into the health
+    score yet; see score_accessibility for why.
+    """
+    if len(shelves) < 2:
+        return 100.0                    # nothing to obstruct anything
+    scores = []
+    for i, a in enumerate(shelves):
+        nearest = min(_gap_m(a, b) for j, b in enumerate(shelves) if j != i)
+        scores.append(min(nearest / MIN_AISLE_M, 1.0))
+    return round(sum(scores) / len(scores) * 100, 1)
+
+
+def score_accessibility(wh: Warehouse) -> float | None:
+    """Not measurable from a single photograph.
+
+    The old version returned free floor area, which is a linear function of
+    shelf count: it never varied with layout, and an empty warehouse scored
+    100 for "accessibility". That metric was real but misnamed, and now lives
+    correctly named as expansion_readiness.
+
+    Measuring it properly means asking whether bays are far enough apart to
+    work between -- which aisle_adequacy() computes. But one front-on photo
+    cannot separate "adjacent bays within one rack run", where touching is
+    correct, from "two rack runs with no aisle", where it is a fault. Scoring
+    the gap anyway rates normal racking as inaccessible. Rather than trade a
+    meaningless number for a misleading one, this returns None and its weight
+    is redistributed.
+    TODO: wire up aisle_adequacy() once bays carry a rack id (fiducial poses).
+    """
+    return None
 
 
 def score_expansion_readiness(wh: Warehouse) -> float:
-    """Spare CAPACITY across shelves = room to grow."""
-    total_cap = sum(s.capacity_estimate for s in wh.shelves)
-    total_boxes = sum(s.box_count for s in wh.shelves)
-    if total_cap == 0:
+    """Room to GROW: how much floor is still unracked and could take shelving.
+
+    The old version was 1 - box_count / capacity_estimate, and phase 1 defined
+    capacity_estimate AS the box count -- so this was structurally ~0 for every
+    warehouse holding any stock, and 100 for an empty one. That discontinuity
+    is why adding the first box to an empty warehouse LOWERED its health score.
+    """
+    fp = wh.floor_plan
+    if fp.total_area <= 0:
         return 0.0
-    free_capacity_ratio = 1 - total_boxes / total_cap
-    return round(free_capacity_ratio * 100, 1)
+    free_ratio = max(0.0, (fp.total_area - fp.used_area) / fp.total_area)
+    return round(free_ratio * 100, 1)
 
 
-def score_safety_compliance(wh: Warehouse) -> float:
-    """Page 9 wants aisle-width (<80cm) and heavy-SKU-on-top checks.
-    Phase 1 doesn't supply aisle widths or SKU weights yet, so we return a
-    neutral placeholder rather than fake a precise number.
+def score_safety_compliance(wh: Warehouse) -> float | None:
+    """Aisle-width and heavy-SKU-on-top checks need data phase 1 can't supply.
+
+    Returns None = "not measurable", so compute_health_score redistributes this
+    weight over the sub-scores that ARE measurable. It used to return a fixed
+    60.0, which at weight 0.20 baked 12 points into every score and capped the
+    real range at 12-92 while the UI claimed 0-100.
     TODO: compute for real once phase 1 supplies aisle + weight data.
     """
-    return 60.0
+    return None
 
 
 def evaluate_health(wh: Warehouse) -> dict:
@@ -107,7 +190,8 @@ def evaluate_health(wh: Warehouse) -> dict:
         "expansion_readiness": score_expansion_readiness(wh),
     }
     result = compute_health_score(subscores)
-    result["subscores"] = subscores     # keep the breakdown for the dashboard
+    # report only what was measured; `unavailable` names the rest
+    result["subscores"] = {k: v for k, v in subscores.items() if v is not None}
     return result
 
 

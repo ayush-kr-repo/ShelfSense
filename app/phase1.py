@@ -8,6 +8,7 @@ WEIGHTS = Path("ml/weights/best_clean.pt")
 _model = None                      # loaded once, lazily (it's ~6MB + torch startup)
 
 STANDARD_SHELF_FOOTPRINT_M2 = 1.2   # a typical shelf footprint (2.0 × 0.6 m)
+TYPICAL_BOX_VOLUME_M3 = 0.036       # a 0.4 × 0.3 × 0.3 m carton
 
 def get_model() -> YOLO:
     global _model
@@ -105,7 +106,12 @@ def run_phase1(warehouse_id: str, image_path: str,
                             "h": (sy2 - sy1) / f, "d": 0.6},
             occupancy_pct=round(occupancy, 2),
             box_count=len(inside),
-            capacity_estimate=max(len(inside), 1),
+            # capacity comes from GEOMETRY, not from what we happened to detect.
+            # It used to be max(len(inside), 1), i.e. capacity == box_count, which
+            # made phase 2's expansion_readiness score structurally always ~0.
+            capacity_estimate=max(
+                1, round((sx2 - sx1) / f * (sy2 - sy1) / f * 0.6 / TYPICAL_BOX_VOLUME_M3)
+            ),
             zone_class=zone_class_for(occupancy),
             confidence=round(conf, 2),
         ))

@@ -108,7 +108,7 @@ A YOLOv8 model, retrained on warehouse images, finds three things in a photo: **
 
 To work out how full a shelf is, the code lays an invisible grid over the shelf rectangle and checks each grid point: is it covered by a box or not? Occupancy is simply the fraction of points covered.
 
-The obvious alternative — adding up the area of every box — is wrong, and this project learned that the hard way. Boxes overlap and stack, so the total exceeds the shelf's own area and every shelf reads 100% full. Grid sampling counts each spot once, no matter how many boxes sit on it.
+The obvious alternative — adding up the area of every box — is wrong, and this project learned that the hard way. Boxes overlap and stack, so the total exceeds the shelf's own area and every shelf reads 100% full. ShelfSense computes the exact area of their *union* instead, by cutting the shelf at every box edge: each cell of the resulting grid is wholly covered or wholly empty, so overlaps are counted once and there is no sampling error.
 
 To convert pixels into metres, ShelfSense uses either the floor size you typed in, or one known measurement passed as `?px_per_m=`. If it has neither, it says the numbers are relative instead of pretending they're metres.
 
@@ -183,7 +183,7 @@ The v3 weights are the ones running. Full numbers on the held-out validation set
 - A single photo only shows the front row. Stock sitting deeper on a shelf can't be seen, so occupancy is always an estimate.
 - Low box recall understates how full busy shelves are.
 - Shelf detection works well on straight-on rack photos and gets worse at steep angles or in poor light.
-- Safety compliance returns a fixed placeholder score, because aisle widths and load weights aren't measured yet.
+- Safety compliance and accessibility are reported as *not measurable* rather than given a placeholder number: the first needs aisle widths and load weights, the second needs a way to tell adjacent bays in one rack from two racks with no aisle. Their weight is redistributed over the sub-scores that could be measured, so the health score still spans a real 0-100.
 
 Swapping in a better model is a one-line change — no other code has to move.
 

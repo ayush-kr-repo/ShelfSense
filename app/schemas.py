@@ -101,6 +101,7 @@ class HealthResult(BaseModel):
     score: float
     band: str
     subscores: dict[str, float]
+    unavailable: list[str] = []     # sub-scores this input could not measure
 
 class Analytics(BaseModel):
     warehouse_id: str
