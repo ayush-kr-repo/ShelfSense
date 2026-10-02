@@ -1,6 +1,11 @@
 from pathlib import Path
 
+import torch
 from ultralytics import YOLO
+
+# One thread: free-tier hosts give a fraction of a core, and torch's
+# default thread pool only adds contention and RSS there.
+torch.set_num_threads(1)
 
 from app.schemas import Warehouse, Shelf, zone_class_for
 

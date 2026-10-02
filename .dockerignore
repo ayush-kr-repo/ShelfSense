@@ -10,3 +10,10 @@ frontend/node_modules
 frontend/
 .pytest_cache
 ml/training/
+ml/eval/
+docs/
+tests/
+
+# unused experiment weights (phase1 loads best_clean.pt only)
+ml/weights/best_s.pt
+ml/weights/best_n.pt
