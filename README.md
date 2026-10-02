@@ -8,6 +8,11 @@
 
 <br/>
 
+<a href="https://shelf-sense-beta.vercel.app"><img src="https://img.shields.io/badge/Live_Demo-Open-38BDF8?style=for-the-badge&logo=vercel&logoColor=white" alt="Live Demo" /></a>
+<a href="https://shelfsense-4trv.onrender.com/docs"><img src="https://img.shields.io/badge/API_Docs-Swagger-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="API Docs" /></a>
+
+<br/>
+
 ![Python](https://img.shields.io/badge/Python-3.13-3776AB?style=for-the-badge&logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black)
@@ -226,10 +231,10 @@ Swapping in a better model is a one-line change — no other code has to move.
 | **Optimization** | Google OR-Tools CP-SAT |
 | **Frontend** | React 19 · Vite · Tailwind v4 |
 | **Visualization** | Three.js (react-three-fiber) · Recharts · Framer Motion · Matplotlib |
-| **Persistence** | SQLite · SQLAlchemy · Alembic |
-| **Async** | Celery · Redis |
+| **Persistence** | Postgres (Neon) · SQLAlchemy · Alembic · SQLite for local dev |
 | **Auth** | JWT (python-jose) · bcrypt |
-| **Tooling** | uv · pytest · Docker |
+| **Deployment** | Docker · Render (API) · Vercel (dashboard) |
+| **Tooling** | uv · pytest |
 
 </div>
 
@@ -237,7 +242,7 @@ Swapping in a better model is a one-line change — no other code has to move.
 
 ## Quickstart
 
-**Prerequisites:** Python 3.13 · [uv](https://docs.astral.sh/uv/) · Node 20+ · Docker Desktop
+**Prerequisites:** Python 3.13 · [uv](https://docs.astral.sh/uv/) · Node 20+
 
 ```bash
 git clone https://github.com/ayush-kr-repo/ShelfSense.git
@@ -248,15 +253,8 @@ uv sync
 **Start the backend**
 
 ```bash
-docker run -d -p 6379:6379 --name shelfsense-redis redis
 uv run alembic upgrade head
 uv run uvicorn app.main:app --reload
-```
-
-**Start the worker** — separate terminal, only needed for background analysis
-
-```bash
-uv run celery -A app.worker.celery_app worker --loglevel=info --pool=solo
 ```
 
 **Start the dashboard** — separate terminal
@@ -287,6 +285,28 @@ uv run python ml/eval/score.py         # score against the hand labels
 
 ---
 
+## Deployment
+
+| Piece | Host | URL |
+|:---|:---|:---|
+| Dashboard | Vercel | <https://shelf-sense-beta.vercel.app> |
+| API | Render (Docker, free tier) | <https://shelfsense-4trv.onrender.com> |
+| Database | Neon Postgres | — |
+
+The API ships as a container ([`Dockerfile`](Dockerfile)) running **CPU-only PyTorch**. `pyproject.toml` pins `torch` and `torchvision` to PyTorch's CPU wheel index, which keeps the image around 1.5 GB instead of the ~5 GB the default PyPI build pulls in with the CUDA stack — none of which a free CPU host can use.
+
+**Environment variables**
+
+| Variable | Required | Purpose |
+|:---|:---|:---|
+| `SECRET_KEY` | yes | JWT signing key. The app refuses to start without it. |
+| `DATABASE_URL` | no | Postgres connection string; falls back to local SQLite. A `postgresql://` URL is rewritten to psycopg 3 automatically, so Neon's string can be pasted verbatim. |
+| `FRONTEND_URL` | no | An extra CORS origin, alongside the `*.vercel.app` pattern already allowed. |
+
+> **Free-tier caveats.** The Render instance sleeps after 15 minutes of inactivity, so the first request after a pause takes ~50 seconds. Uploaded photos and generated heatmaps sit on ephemeral disk and are cleared on restart; accounts and warehouse records persist in Postgres.
+
+---
+
 ## API
 
 ![API endpoints](docs/endpoints.png)
@@ -303,8 +323,8 @@ uv run python ml/eval/score.py         # score against the hand labels
 | `DELETE /api/v1/warehouse/{id}` | Delete a warehouse and its files |
 | `POST /api/v1/optimize` | Work out the best shelf layout |
 | `GET /api/v1/layout/{id}` | Fetch a saved layout |
-| `POST /api/v1/analyze` | Start a background analysis, returns a task id |
-| `GET /api/v1/task/{id}` | Check how that task is going |
+| `POST /api/v1/analyze` | Run the detection and scoring pipeline, returns a task record |
+| `GET /api/v1/task/{id}` | Look up the result of a past analysis run |
 
 Every warehouse endpoint requires a login token and checks that the warehouse belongs to you.
 
@@ -322,7 +342,7 @@ app/
 ├── auth.py              # Login tokens and password hashing
 ├── scale.py             # Pixels to metres
 ├── heatmap.py           # Draws the occupancy heatmap
-├── worker.py            # Background tasks (Celery)
+├── worker.py            # Celery task definition (unused: /analyze runs inline)
 └── phase1.py … phase3.py    # Detection · Scoring · Layout solving
 
 frontend/src/

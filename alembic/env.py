@@ -9,10 +9,10 @@ from alembic import context
 # access to the values within the .ini file in use.
 config = context.config
 
-import os
-db_url = os.getenv("DATABASE_URL")
-if db_url:
-    config.set_main_option("sqlalchemy.url", db_url.replace("%", "%%"))
+# Reuse the app's normalised URL so migrations and the app can never
+# disagree about which database (or which driver) they are talking to.
+from app.database import DATABASE_URL
+config.set_main_option("sqlalchemy.url", DATABASE_URL.replace("%", "%%"))
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
