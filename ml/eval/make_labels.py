@@ -35,6 +35,8 @@ IMAGES = sorted(p.as_posix() for p in Path("ml/eval/images").glob("*.jpg"))
 
 OUT = Path("ml/eval/labels.json")
 ANNOTATED = Path("ml/eval/annotated")
+CROPS = Path("ml/eval/crops")
+CROP_MARGIN = 0.12            # context around the bay, as a fraction of its size
 
 OUTLINE = (56, 189, 248)      # sky-400
 TEXT_BG = (15, 23, 42)        # slate-900
@@ -72,6 +74,31 @@ def annotate(image_path: str, bays: list[dict], out_path: Path) -> None:
     img.save(out_path)
 
 
+def crop_bay(image_path: str, bay: dict, index: int, out_path: Path) -> None:
+    """One bay on its own, with a little context and its exact edge drawn.
+
+    Narrow bays are hard to judge inside a busy photo, and a bay judged in
+    isolation is judged more consistently.
+    """
+    img = Image.open(image_path).convert("RGB")
+    x1, y1, x2, y2 = bay["box"]
+    mx = (x2 - x1) * CROP_MARGIN
+    my = (y2 - y1) * CROP_MARGIN
+    left, top = max(0, x1 - mx), max(0, y1 - my)
+    right, bottom = min(img.width, x2 + mx), min(img.height, y2 + my)
+
+    crop = img.crop((left, top, right, bottom))
+    draw = ImageDraw.Draw(crop)
+    draw.rectangle([x1 - left, y1 - top, x2 - left, y2 - top],
+                   outline=OUTLINE, width=max(2, crop.width // 200))
+    # upscale small crops so the detail is actually visible
+    if crop.width < 500:
+        scale = 500 / crop.width
+        crop = crop.resize((int(crop.width * scale), int(crop.height * scale)))
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    crop.save(out_path)
+
+
 def carry_over(old: list[dict], new: list[dict]) -> int:
     """Copy already-entered truths onto refreshed detections, matched by box."""
     kept = 0
@@ -100,6 +127,7 @@ def main() -> None:
         name = Path(image_path).stem
         annotate(image_path, bays, ANNOTATED / f"{name}.png")
         for i, bay in enumerate(bays):
+            crop_bay(image_path, bay, i, CROPS / f"{name}_bay{i}.png")
             entries.append({
                 "image": image_path,
                 "bay": i,

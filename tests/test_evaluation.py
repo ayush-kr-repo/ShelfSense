@@ -5,7 +5,7 @@ to report, not an assertion to make - but the arithmetic producing it has to
 be right, or the number is worse than having none.
 """
 
-from app.evaluation import iou, match_bays, summarise
+from app.evaluation import iou, match_bays, summarise, validate_labels
 
 
 # --------------------------------------------------------------- iou
@@ -124,3 +124,37 @@ def test_target_boundary_is_inclusive():
     pairs = [(_label((0, 0, 1, 1), 0.50), _det((0, 0, 1, 1), 0.60))]
     assert summarise(pairs, n_labelled=1, target_mae_pp=10.0)["within_target"] is True
     assert summarise(pairs, n_labelled=1, target_mae_pp=9.0)["within_target"] is False
+
+
+# --------------------------------------------------------------- label validation
+
+def _entry(value):
+    return {"image": "ml/eval/images/x.jpg", "bay": 1, "true_occupancy": value}
+
+
+def test_valid_fractions_produce_no_problems():
+    assert validate_labels([_entry(0.0), _entry(0.45), _entry(1.0)]) == []
+
+
+def test_unlabelled_bays_are_not_problems():
+    assert validate_labels([_entry(None)]) == []
+
+
+def test_percentage_typed_as_whole_number_is_caught():
+    """Typing 20 for "20%" is silent otherwise: the arithmetic runs and reports
+    a 1952 pp error, which reads as model failure rather than a typo."""
+    problems = validate_labels([_entry(20)])
+    assert len(problems) == 1
+    assert "0.20" in problems[0]          # suggests the correction
+
+
+def test_negative_occupancy_is_caught():
+    assert len(validate_labels([_entry(-0.1)])) == 1
+
+
+def test_non_numeric_occupancy_is_caught():
+    assert len(validate_labels([_entry("half")])) == 1
+
+
+def test_every_bad_entry_is_reported_not_just_the_first():
+    assert len(validate_labels([_entry(20), _entry(0.5), _entry(-1)])) == 2

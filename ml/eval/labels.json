@@ -10,7 +10,7 @@
         292.9,
         374.0
       ],
-      "true_occupancy": null
+      "true_occupancy": 0.65
     },
     {
       "image": "ml/eval/images/test.jpg",
@@ -21,7 +21,7 @@
         365.6,
         350.8
       ],
-      "true_occupancy": null
+      "true_occupancy": 0.5
     },
     {
       "image": "ml/eval/images/test.jpg",
@@ -32,7 +32,7 @@
         189.7,
         367.9
       ],
-      "true_occupancy": null
+      "true_occupancy": 0.45
     },
     {
       "image": "ml/eval/images/test.jpg",
@@ -164,7 +164,7 @@
         315.5,
         702.9
       ],
-      "true_occupancy": null
+      "true_occupancy": 0.2
     },
     {
       "image": "ml/eval/images/wh_test.jpg",

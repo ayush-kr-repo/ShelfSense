@@ -16,7 +16,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from app.evaluation import match_bays, summarise      # noqa: E402
+from app.evaluation import match_bays, summarise, validate_labels  # noqa: E402
 from make_labels import detect_bays                   # noqa: E402
 
 LABELS = Path("ml/eval/labels.json")
@@ -31,6 +31,13 @@ def main() -> None:
     labelled = [e for e in entries if e.get("true_occupancy") is not None]
     if not labelled:
         sys.exit(f"No bays labelled yet. Fill in true_occupancy in {LABELS}.")
+
+    problems = validate_labels(labelled)
+    if problems:
+        detail = "\n  ".join(problems)
+        sys.exit(f"Bad labels in {LABELS}:\n  {detail}\n\n"
+                 "true_occupancy is a FRACTION (0.45), not a percentage (45). "
+                 "Fix these and re-run.")
 
     by_image: dict[str, list[dict]] = {}
     for e in labelled:

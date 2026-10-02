@@ -20,3 +20,6 @@ runs/
 Planner_docs/
 # derived evaluation renders (regenerate with ml/eval/make_labels.py)
 ml/eval/annotated/
+
+# derived per-bay crops (regenerate with ml/eval/make_labels.py)
+ml/eval/crops/

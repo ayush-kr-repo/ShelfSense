@@ -82,3 +82,24 @@ def summarise(pairs: list[tuple[dict, dict]], n_labelled: int,
         "within_target": mae <= target_mae_pp,
         "target_mae_pp": target_mae_pp,
     }
+
+
+def validate_labels(entries: list[dict]) -> list[str]:
+    """Problems with hand-entered ground truth, as human-readable strings.
+
+    true_occupancy is a FRACTION. Typing 20 for "20%" is the easy slip, and it
+    is silent: the arithmetic still runs and reports a 1952 pp error, which
+    reads as a catastrophic model failure rather than a typo. Catch it here.
+    """
+    problems = []
+    for e in entries:
+        value = e.get("true_occupancy")
+        if value is None:
+            continue
+        where = f"{e['image']} bay {e['bay']}"
+        if not isinstance(value, (int, float)):
+            problems.append(f"{where}: true_occupancy must be a number, got {value!r}")
+        elif not 0.0 <= value <= 1.0:
+            hint = f" (did you mean {value / 100:.2f}?)" if 1 < value <= 100 else ""
+            problems.append(f"{where}: true_occupancy must be 0.0-1.0, got {value}{hint}")
+    return problems
