@@ -291,7 +291,7 @@ uv run python ml/eval/score.py         # score against the hand labels
 |:---|:---|:---|
 | Dashboard | Vercel | <https://shelf-sense-beta.vercel.app> |
 | API | Render (Docker, free tier) | <https://shelfsense-4trv.onrender.com> |
-| Database | Neon Postgres | — |
+| Database | Neon Postgres | Private - connection string is a Render env var |
 
 The API ships as a container ([`Dockerfile`](Dockerfile)) running **CPU-only PyTorch**. `pyproject.toml` pins `torch` and `torchvision` to PyTorch's CPU wheel index, which keeps the image around 1.5 GB instead of the ~5 GB the default PyPI build pulls in with the CUDA stack — none of which a free CPU host can use.
 
@@ -326,7 +326,7 @@ The API ships as a container ([`Dockerfile`](Dockerfile)) running **CPU-only PyT
 | `POST /api/v1/analyze` | Run the detection and scoring pipeline, returns a task record |
 | `GET /api/v1/task/{id}` | Look up the result of a past analysis run |
 
-Every warehouse endpoint requires a login token and checks that the warehouse belongs to you.
+The eight warehouse endpoints each require a login token and verify that the warehouse belongs to the caller. `POST /api/v1/optimize` is deliberately open so the capacity planner works without an account; `GET /api/v1/task/{id}` and `GET /api/v1/layout/{id}` are not yet scoped to the caller.
 
 ---
 
@@ -342,10 +342,13 @@ app/
 ├── auth.py              # Login tokens and password hashing
 ├── scale.py             # Pixels to metres
 ├── heatmap.py           # Draws the occupancy heatmap
+├── evaluation.py        # Scores occupancy estimates against hand labels
 ├── worker.py            # Celery task definition (unused: /analyze runs inline)
 └── phase1.py … phase3.py    # Detection · Scoring · Layout solving
 
 frontend/src/
+├── main.jsx             # React entry point
+├── App.jsx              # Holds the token, switches between Login and Dashboard
 ├── api.js               # Talks to the backend, attaches the login token
 ├── Login.jsx            # Login screen
 ├── Dashboard.jsx        # Warehouse cards and management
@@ -356,7 +359,7 @@ frontend/src/
 
 alembic/                 # Database migrations
 ml/                      # Model weights, training notebook, annotation guide
-├── eval/                # Occupancy ground truth: images, labels, scoring
+└── eval/                # Occupancy ground truth: images, labels, scoring
 tests/                   # Test suite
 Dockerfile               # For deployment
 ```
