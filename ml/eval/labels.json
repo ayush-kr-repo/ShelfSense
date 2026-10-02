@@ -1,0 +1,324 @@
+{
+  "_readme": "Fill in true_occupancy for each bay as a fraction 0.0-1.0, judging from ml/eval/annotated/. Leave null to skip a bay.",
+  "bays": [
+    {
+      "image": "ml/eval/images/test.jpg",
+      "bay": 0,
+      "box": [
+        188.0,
+        7.0,
+        292.9,
+        374.0
+      ],
+      "true_occupancy": null
+    },
+    {
+      "image": "ml/eval/images/test.jpg",
+      "bay": 1,
+      "box": [
+        294.0,
+        0.0,
+        365.6,
+        350.8
+      ],
+      "true_occupancy": null
+    },
+    {
+      "image": "ml/eval/images/test.jpg",
+      "bay": 2,
+      "box": [
+        111.0,
+        2.0,
+        189.7,
+        367.9
+      ],
+      "true_occupancy": null
+    },
+    {
+      "image": "ml/eval/images/test.jpg",
+      "bay": 3,
+      "box": [
+        0.0,
+        0.0,
+        33.4,
+        355.2
+      ],
+      "true_occupancy": null
+    },
+    {
+      "image": "ml/eval/images/test.jpg",
+      "bay": 4,
+      "box": [
+        37.0,
+        0.0,
+        97.6,
+        350.0
+      ],
+      "true_occupancy": null
+    },
+    {
+      "image": "ml/eval/images/test.jpg",
+      "bay": 5,
+      "box": [
+        369.0,
+        2.0,
+        410.9,
+        333.5
+      ],
+      "true_occupancy": null
+    },
+    {
+      "image": "ml/eval/images/test.jpg",
+      "bay": 6,
+      "box": [
+        415.0,
+        4.0,
+        444.2,
+        319.6
+      ],
+      "true_occupancy": null
+    },
+    {
+      "image": "ml/eval/images/test.jpg",
+      "bay": 7,
+      "box": [
+        0.0,
+        0.0,
+        32.0,
+        262.6
+      ],
+      "true_occupancy": null
+    },
+    {
+      "image": "ml/eval/images/test.jpg",
+      "bay": 8,
+      "box": [
+        38.0,
+        0.0,
+        97.6,
+        185.8
+      ],
+      "true_occupancy": null
+    },
+    {
+      "image": "ml/eval/images/test.jpg",
+      "bay": 9,
+      "box": [
+        415.0,
+        1.0,
+        456.2,
+        322.3
+      ],
+      "true_occupancy": null
+    },
+    {
+      "image": "ml/eval/images/test.jpg",
+      "bay": 10,
+      "box": [
+        407.0,
+        11.0,
+        451.1,
+        301.2
+      ],
+      "true_occupancy": null
+    },
+    {
+      "image": "ml/eval/images/wh_office.jpg",
+      "bay": 0,
+      "box": [
+        353.0,
+        28.0,
+        577.6,
+        532.8
+      ],
+      "true_occupancy": null
+    },
+    {
+      "image": "ml/eval/images/wh_office.jpg",
+      "bay": 1,
+      "box": [
+        291.0,
+        0.0,
+        580.5,
+        392.6
+      ],
+      "true_occupancy": null
+    },
+    {
+      "image": "ml/eval/images/wh_test.jpg",
+      "bay": 0,
+      "box": [
+        852.0,
+        0.0,
+        1110.9,
+        726.3
+      ],
+      "true_occupancy": null
+    },
+    {
+      "image": "ml/eval/images/wh_test.jpg",
+      "bay": 1,
+      "box": [
+        41.0,
+        7.0,
+        315.5,
+        702.9
+      ],
+      "true_occupancy": null
+    },
+    {
+      "image": "ml/eval/images/wh_test.jpg",
+      "bay": 2,
+      "box": [
+        694.0,
+        28.0,
+        853.1,
+        716.5
+      ],
+      "true_occupancy": null
+    },
+    {
+      "image": "ml/eval/images/wh_test.jpg",
+      "bay": 3,
+      "box": [
+        589.0,
+        33.0,
+        689.8,
+        714.0
+      ],
+      "true_occupancy": null
+    },
+    {
+      "image": "ml/eval/images/wh_test.jpg",
+      "bay": 4,
+      "box": [
+        338.0,
+        37.0,
+        583.1,
+        712.3
+      ],
+      "true_occupancy": null
+    },
+    {
+      "image": "ml/eval/images/wh_test_2.jpg",
+      "bay": 0,
+      "box": [
+        112.0,
+        0.0,
+        288.8,
+        482.1
+      ],
+      "true_occupancy": null
+    },
+    {
+      "image": "ml/eval/images/wh_test_2.jpg",
+      "bay": 1,
+      "box": [
+        292.0,
+        0.0,
+        387.0,
+        457.4
+      ],
+      "true_occupancy": null
+    },
+    {
+      "image": "ml/eval/images/wh_test_2.jpg",
+      "bay": 2,
+      "box": [
+        0.0,
+        0.0,
+        113.5,
+        575.4
+      ],
+      "true_occupancy": null
+    },
+    {
+      "image": "ml/eval/images/wh_test_2.jpg",
+      "bay": 3,
+      "box": [
+        393.0,
+        0.0,
+        447.0,
+        417.2
+      ],
+      "true_occupancy": null
+    },
+    {
+      "image": "ml/eval/images/wh_test_3.jpg",
+      "bay": 0,
+      "box": [
+        214.0,
+        50.0,
+        324.5,
+        448.2
+      ],
+      "true_occupancy": null
+    },
+    {
+      "image": "ml/eval/images/wh_test_3.jpg",
+      "bay": 1,
+      "box": [
+        440.0,
+        8.0,
+        496.5,
+        412.7
+      ],
+      "true_occupancy": null
+    },
+    {
+      "image": "ml/eval/images/wh_test_3.jpg",
+      "bay": 2,
+      "box": [
+        74.0,
+        20.0,
+        150.7,
+        424.7
+      ],
+      "true_occupancy": null
+    },
+    {
+      "image": "ml/eval/images/wh_test_3.jpg",
+      "bay": 3,
+      "box": [
+        0.0,
+        0.0,
+        33.3,
+        425.5
+      ],
+      "true_occupancy": null
+    },
+    {
+      "image": "ml/eval/images/wh_test_3.jpg",
+      "bay": 4,
+      "box": [
+        381.0,
+        19.0,
+        433.6,
+        441.5
+      ],
+      "true_occupancy": null
+    },
+    {
+      "image": "ml/eval/images/wh_test_3.jpg",
+      "bay": 5,
+      "box": [
+        441.0,
+        80.0,
+        501.0,
+        460.2
+      ],
+      "true_occupancy": null
+    },
+    {
+      "image": "ml/eval/images/wh_test_3.jpg",
+      "bay": 6,
+      "box": [
+        326.0,
+        15.0,
+        382.2,
+        449.8
+      ],
+      "true_occupancy": null
+    }
+  ]
+}

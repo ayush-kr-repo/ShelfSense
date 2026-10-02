@@ -18,3 +18,5 @@ static/heatmaps/
 runs/
 
 Planner_docs/
+# derived evaluation renders (regenerate with ml/eval/make_labels.py)
+ml/eval/annotated/
