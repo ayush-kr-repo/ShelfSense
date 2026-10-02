@@ -43,7 +43,7 @@ Warehouse space is expensive, but most storage decisions get made with a tape me
 | Question | How ShelfSense answers it |
 |---|---|
 | **How full is my warehouse?** | Measures how much of each shelf is covered by stock |
-| **How healthy is my storage?** | Scores it 0–100 across six factors |
+| **How healthy is my storage?** | Scores it 0–100 across six factors, and says which ones it can't measure rather than guessing |
 | **How many more shelves fit?** | Solves for the best possible arrangement of your floor |
 | **What should that layout look like?** | Draws it in 3D you can rotate and zoom |
 | **What should I fix first?** | Lists specific problems, ranked by impact |
@@ -106,7 +106,7 @@ Every stage reads and writes **the same JSON structure**, defined once with Pyda
 
 A YOLOv8 model, retrained on warehouse images, finds three things in a photo: **shelves** (rack bays), **boxes**, and **pallets**.
 
-To work out how full a shelf is, the code lays an invisible grid over the shelf rectangle and checks each grid point: is it covered by a box or not? Occupancy is simply the fraction of points covered.
+To work out how full a shelf is, the code measures what fraction of the shelf rectangle is covered by at least one box.
 
 The obvious alternative — adding up the area of every box — is wrong, and this project learned that the hard way. Boxes overlap and stack, so the total exceeds the shelf's own area and every shelf reads 100% full. ShelfSense computes the exact area of their *union* instead, by cutting the shelf at every box edge: each cell of the resulting grid is wholly covered or wholly empty, so overlaps are counted once and there is no sampling error.
 
@@ -114,7 +114,9 @@ To convert pixels into metres, ShelfSense uses either the floor size you typed i
 
 ### Phase 2 — Scoring the warehouse
 
-Storage Utilization Rate is how much of the total shelf volume actually holds stock. Six sub-scores are combined into one weighted health score with a label (Poor, Fair, Good, Excellent).
+Storage Utilization Rate is how much of the total shelf volume actually holds stock. Six sub-scores feed one weighted health score with a label (Poor, Fair, Good, Excellent).
+
+A sub-score that can't be measured from a single photograph returns *nothing* rather than a placeholder, and its weight is redistributed over the ones that could be measured. Filling a gap with a constant quietly shrinks the range: a hardcoded 60 at weight 0.20 pinned 12 points into every score ever produced, so the real span was 12–92 while the UI claimed 0–100. The response also names what it couldn't measure.
 
 Recommendations come from independent rules, each of which either fires or stays quiet. Every one cites the evidence that triggered it — naming specific bays and their occupancy — and estimates the health-score points it would recover, so the list is ranked by what's actually worth doing first. One rule detects stock stacked on the floor rather than on racking, which blocks aisles and means existing capacity is going unused.
 
@@ -131,6 +133,10 @@ Google OR-Tools CP-SAT treats the layout as a puzzle. You give it the floor size
 
 The solver then finds the arrangement that fits **the most shelves**. If you ask for more shelves than the floor can hold, it places as many as it can rather than failing.
 
+CP-SAT works in whole numbers, so the floor becomes a grid of cells and every measurement is rounded to fit it. The direction is chosen deliberately: **floors round down, shelves and aisles round up, and the keep-clear exit zone grows.** The planner may understate capacity; it must never overstate it. Reporting one rack too few costs a rack — reporting one too many costs a site visit.
+
+Identical shelves are interchangeable, so every layout has *k!* relabelled twins that score the same and the solver re-proves each of them. Forcing a canonical order over duplicates removes the redundancy without removing a single genuine layout: **17.5s → 0.10s** on twenty identical shelves, same proven-optimal answer, and it now reaches the optimum on instances where it previously hit the time limit.
+
 ---
 
 ## Model Development
@@ -146,7 +152,38 @@ Detection quality is reported as **mAP@50**, the standard metric for object dete
 - **AP (Average Precision)** — one number combining precision and recall across every confidence setting.
 - **mAP** — AP averaged across all classes.
 
-**Why the 50% threshold suits this project:** ShelfSense doesn't need pixel-perfect edges. Occupancy is measured by grid coverage, and the layout planner only needs a count of bays. A box that's roughly in the right place is useful; a box that's 90% perfect isn't meaningfully better.
+**Why the 50% threshold suits this project:** ShelfSense doesn't need pixel-perfect edges. Occupancy is measured by area coverage, and the layout planner only needs a count of bays. A box that's roughly in the right place is useful; a box that's 90% perfect isn't meaningfully better.
+
+### How occupancy is measured
+
+Detection accuracy and occupancy accuracy are different questions, and they are
+measured separately. A model that finds fewer bays will look like it changed the
+occupancy numbers unless the two are kept apart.
+
+Ground truth lives in `ml/eval/labels.json`, keyed to each bay's **bounding box**
+rather than its index — `S-3` in one model version isn't `S-3` in the next, but
+the bay in the top-left corner is still the same bay. At scoring time labels are
+matched to detections by overlap, so labelling work survives a retrain.
+
+```bash
+uv run python ml/eval/make_labels.py   # template + annotated images to label from
+uv run python ml/eval/score.py         # MAE, bias, and match rate
+```
+
+Three things the harness reports, and why each one matters:
+
+- **MAE in percentage points** — the headline number. Target: ≤ 10 pp.
+- **Bias, signed** — positive means the estimate reads *fuller* than reality,
+  which is the dangerous direction: a planner that overstates fullness refuses
+  stock it could have taken. Two bays off by +20 and −20 give an MAE of 20 and
+  a bias of 0; that is a different fault from both reading +20.
+- **Match rate, separately** — a labelled bay the model never found is a
+  *detection* miss. It lowers the match rate and is excluded from MAE, so a
+  recall regression can't masquerade as an occupancy regression.
+
+The annotated images show only bay outlines — never the model's box detections
+or its occupancy estimate. Seeing the prediction before judging the truth is how
+a ground-truth set quietly becomes a copy of the model.
 
 ### Three experiments
 
@@ -252,6 +289,13 @@ npm run dev
 uv run pytest
 ```
 
+**Measure occupancy accuracy**
+
+```bash
+uv run python ml/eval/make_labels.py   # build the labelling template
+uv run python ml/eval/score.py         # score against the hand labels
+```
+
 ---
 
 ## API
@@ -303,6 +347,7 @@ frontend/src/
 
 alembic/                 # Database migrations
 ml/                      # Model weights, training notebook, annotation guide
+├── eval/                # Occupancy ground truth: images, labels, scoring
 tests/                   # Test suite
 Dockerfile               # For deployment
 ```
