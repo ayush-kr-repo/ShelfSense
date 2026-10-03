@@ -14,6 +14,7 @@ from app.schemas import WarehouseUpdate
 import re
 from pathlib import Path
 from fastapi import UploadFile, File, Form
+from PIL import Image, UnidentifiedImageError
 
 MAX_UPLOAD_BYTES = 8 * 1024 * 1024
 
@@ -34,10 +35,43 @@ def safe_id(warehouse_id: str) -> str:
     return warehouse_id
 
 
-def image_for(warehouse_id: str) -> str:
-    """Use this warehouse's uploaded photo if it exists, else the demo image."""
+def normalise_to_jpeg(path: Path) -> None:
+    """Rewrite an uploaded file as a real JPEG, whatever it arrived as.
+
+    The browser's content-type is not a guarantee. An AVIF or HEIC photo - what
+    a modern phone or a right-click-save produces - arrives as image/* and gets
+    saved under a .jpg name, but OpenCV (which YOLO decodes with) cannot read
+    it and returns no results at all. Pillow reads far more formats, so the
+    file is decoded once here and written back as something the model can
+    actually open. Raises 400 if it isn't a readable image.
+    """
+    try:
+        with Image.open(path) as im:
+            im.load()
+            rgb = im.convert("RGB")
+        rgb.save(path, "JPEG", quality=90)
+    except (UnidentifiedImageError, OSError, ValueError) as exc:
+        path.unlink(missing_ok=True)
+        raise HTTPException(status_code=400,
+                            detail="Could not read that image file") from exc
+
+
+def uploaded_image(warehouse_id: str) -> Path | None:
+    """This warehouse's own photo, or None if it has never had one."""
     path = UPLOAD_DIR / f"{safe_id(warehouse_id)}.jpg"
-    return str(path) if path.exists() else DEMO_IMAGE
+    return path if path.exists() else None
+
+
+def analysis_image(warehouse_id: str) -> tuple[str, bool]:
+    """The image to analyse, and whether it is the stand-in demo photo.
+
+    Falling back to the demo keeps a fresh account from looking broken, but the
+    caller MUST pass the flag on to the response. Without it the user sees a
+    health score, SUR and recommendations computed from a photograph of someone
+    else's warehouse, labelled as their own.
+    """
+    own = uploaded_image(warehouse_id)
+    return (str(own), False) if own else (DEMO_IMAGE, True)
 
 
 @router.get("/warehouse/{warehouse_id}", response_model=Warehouse)
@@ -46,7 +80,8 @@ def get_warehouse(warehouse_id: str,
                   db: Session = Depends(get_db),
                   user: UserRecord = Depends(get_current_user)):
     record = owned_warehouse(warehouse_id, db, user)
-    return run_phase1(warehouse_id, image_for(warehouse_id), px_per_m, record.dimensions)
+    image_path, _ = analysis_image(warehouse_id)
+    return run_phase1(warehouse_id, image_path, px_per_m, record.dimensions)
 
 @router.get("/analytics/{warehouse_id}", response_model=Analytics)
 def get_analytics(warehouse_id: str,
@@ -55,13 +90,17 @@ def get_analytics(warehouse_id: str,
                   user: UserRecord = Depends(get_current_user)):
     record = owned_warehouse(warehouse_id, db, user)
     dims = record.dimensions
-    wh = run_phase1(warehouse_id, image_for(warehouse_id), px_per_m, dims)
+    image_path, is_demo = analysis_image(warehouse_id)
+    wh = run_phase1(warehouse_id, image_path, px_per_m, dims)
     analytics = run_phase2(wh)
 
     out = HEATMAP_DIR / f"{safe_id(warehouse_id)}.png"
-    generate_heatmap(wh, str(out))      # Draw + save PNG
+    # overlay the image that was ACTUALLY analysed, so the picture and the
+    # numbers always describe the same thing
+    generate_heatmap(wh, str(out), image_path)
     analytics.heatmap_ref = f"/static/heatmaps/{warehouse_id}.png"      # served by static mount
-    if (UPLOAD_DIR / f"{warehouse_id}.jpg").exists():
+    analytics.is_demo = is_demo
+    if not is_demo:
         analytics.image_ref = f"/uploads/{warehouse_id}.jpg"
     analytics.shelf_count = len(wh.shelves)
     analytics.floor_dims = wh.dimensions
@@ -76,7 +115,7 @@ def analyze(warehouse_id: str = "wh_demo",
     task = TaskRecord(warehouse_id=warehouse_id, type="analyze", status="running")
     db.add(task); db.commit(); db.refresh(task)
     try:
-        wh = run_phase1(warehouse_id, image_for(warehouse_id), None, record.dimensions)
+        wh = run_phase1(warehouse_id, analysis_image(warehouse_id)[0], None, record.dimensions)
         run_phase2(wh)
         task.status, task.progress = "done", 100
     except Exception as e:
@@ -115,6 +154,8 @@ def upload_image(warehouse_id: str,
     except HTTPException:
         dest.unlink(missing_ok=True)
         raise
+
+    normalise_to_jpeg(dest)      # .jpg must actually BE a jpeg
 
     dims = None
     if length_m and width_m:

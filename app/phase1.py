@@ -72,6 +72,11 @@ def run_phase1(warehouse_id: str, image_path: str,
                dimensions: dict | None = None) -> Warehouse:
     """Phase 1, for real: image -> YOLO detections -> Warehouse JSON."""
     results = get_model()(image_path, conf=0.15)
+    if not results:
+        # OpenCV returns nothing for a format it can't decode - an AVIF or HEIC
+        # file saved with a .jpg name, or a truncated upload. Without this the
+        # failure surfaced as "IndexError: list index out of range".
+        raise ValueError(f"Could not read image: {image_path}")
     r = results[0]
     img_h, img_w = r.orig_shape
 

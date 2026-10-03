@@ -111,6 +111,7 @@ class Analytics(BaseModel):
     heatmap_ref: str | None = None
     image_ref: str | None = None
     occupancy_source: str = "ai"
+    is_demo: bool = False           # analysis ran on the demo photo, not the user's
     shelf_count: int = 0
     floor_dims: Dimensions | None = None
 
