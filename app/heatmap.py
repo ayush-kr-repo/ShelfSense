@@ -25,6 +25,11 @@ from PIL import Image, ImageDraw, ImageFont
 
 FALLBACK_PX_PER_M = 100.0        # phase 1's own fallback when scale is relative
 LOW_CONFIDENCE = 0.50            # below this, the bay is drawn as provisional
+# NOTE: Shelf.confidence is YOLO's score for the SHELF detection - how sure it
+# is that this rectangle is a rack bay. It is NOT a confidence in the occupancy
+# figure; nothing produces one of those yet. The two correlate (a bay the model
+# barely sees is also one it finds no boxes in) but they are different claims,
+# so the legend says "detection confidence" rather than just "confidence".
 FILL_ALPHA = 95                  # 0-255; the photo must stay readable underneath
 
 INK = (248, 250, 252)
@@ -92,7 +97,7 @@ def _legend(img: Image.Image, draw: ImageDraw.ImageDraw) -> None:
         draw.line([x0 + i, y0, x0 + i, y0 + bar_h],
                   fill=occupancy_color(i / max(bar_w - 1, 1)))
     draw.rectangle([x0, y0, x0 + bar_w, y0 + bar_h], outline=INK, width=1)
-    draw.text((x0, y0 + bar_h + 6), "dashed = low confidence",
+    draw.text((x0, y0 + bar_h + 6), "dashed = low detection confidence",
               font=small, fill=DIM)
 
 
@@ -141,7 +146,7 @@ def generate_heatmap(wh, out_path: str, image_path: str | None = None) -> None:
             draw.rectangle(rect, outline=INK, width=stroke)
 
         pct = f"{int(round(s.occupancy_pct * 100))}%"
-        meta = f"{s.id} · conf {s.confidence:.2f}"
+        meta = f"{s.id} · det {s.confidence:.2f}"
         pw, ph = draw.textbbox((0, 0), pct, font=label_font)[2:]
         mw, mh = draw.textbbox((0, 0), meta, font=sub_font)[2:]
 
